@@ -1,0 +1,2899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hamlet & Ghost — Recipe Builder</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1812; --ink-mid: #4a4640; --ink-light: #8a8680; --ink-ghost: #c8c4bc;
+    --parchment: #f5f2ec; --parchment-dark: #ede9e0; --parchment-mid: #e8e4db;
+    --accent: #c8392b; --accent-dim: #f5e8e6; --gold: #b8860b; --gold-dim: #f0e8d0;
+    --green: #2d6a4f; --green-dim: #d8ecd4; --blue: #1a4a7a; --blue-dim: #dce8f5;
+    --border: rgba(26,24,18,0.1); --border-mid: rgba(26,24,18,0.2);
+    --radius: 6px; --radius-lg: 10px;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--parchment); color: var(--ink); font-family: var(--sans); font-size: 14px; min-height: 100vh; }
+
+  /* NAV */
+  .nav { background: var(--ink); padding: 0 2rem; display: flex; align-items: center; height: 52px; border-bottom: 2px solid var(--accent); }
+  .nav-brand { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--parchment); letter-spacing: 0.08em; text-transform: uppercase; margin-right: 2rem; white-space: nowrap; }
+  .nav-brand span { color: var(--accent); }
+  .nav-links { display: flex; gap: 0; flex: 1; }
+  .nav-link { font-family: var(--mono); font-size: 11px; color: var(--ink-ghost); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 1rem; height: 52px; display: flex; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; white-space: nowrap; }
+  .nav-link:hover { color: var(--parchment); }
+  .nav-link.active { color: var(--parchment); border-bottom-color: var(--accent); }
+
+  /* LAYOUT */
+  .page { max-width: 1280px; margin: 0 auto; padding: 1.5rem 2rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .page-title { font-family: var(--mono); font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+  .page-sub { font-size: 13px; color: var(--ink-light); margin-top: 3px; }
+
+  /* RECIPE LIST SIDEBAR */
+  .layout { display: grid; grid-template-columns: 260px 1fr; gap: 1.25rem; align-items: start; }
+  .sidebar { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; position: sticky; top: 1rem; }
+  .sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--parchment-dark); display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-title { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); }
+  .recipe-list { max-height: calc(100vh - 180px); overflow-y: auto; }
+  .recipe-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .recipe-item:hover { background: var(--parchment); }
+  .recipe-item.active { background: var(--ink); }
+  .recipe-item.active .ri-name { color: var(--parchment); }
+  .recipe-item.active .ri-meta { color: var(--ink-ghost); }
+  .ri-name { font-size: 13px; font-weight: 500; }
+  .ri-meta { font-size: 11px; color: var(--ink-light); margin-top: 2px; font-family: var(--mono); }
+  .ri-cogs { font-family: var(--mono); font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .cogs-ok { color: var(--green); }
+  .cogs-warn { color: var(--gold); }
+  .cogs-bad { color: var(--accent); }
+  .cogs-unknown { color: var(--ink-ghost); }
+  .sidebar-empty { padding: 2rem 1rem; text-align: center; color: var(--ink-light); font-size: 12px; }
+
+  /* BUILDER */
+  .builder { display: flex; flex-direction: column; gap: 1rem; }
+  .card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+  .card-title { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); margin-bottom: 1rem; }
+
+  /* FORM ELEMENTS */
+  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); }
+  .form-input, .form-select, .form-textarea {
+    border: 1px solid var(--border-mid); border-radius: var(--radius);
+    padding: 0 10px; font-family: var(--sans); font-size: 13px;
+    background: white; color: var(--ink); outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input, .form-select { height: 34px; }
+  .form-textarea { padding: 8px 10px; resize: vertical; min-height: 64px; line-height: 1.5; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--ink-mid); }
+  .form-input::placeholder, .form-textarea::placeholder { color: var(--ink-ghost); }
+  .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234a4640' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+
+  /* BUTTONS */
+  .btn { height: 34px; border: 1px solid var(--border-mid); border-radius: var(--radius); padding: 0 14px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; background: var(--parchment); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; white-space: nowrap; }
+  .btn:hover { background: var(--parchment-mid); }
+  .btn-primary { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
+  .btn-primary:hover { background: var(--ink-mid); }
+  .btn-sm { height: 28px; font-size: 10px; padding: 0 10px; }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--ink-light); }
+  .btn-ghost:hover { background: var(--parchment); border-color: var(--border); color: var(--ink); }
+  .btn-danger { border-color: var(--accent); color: var(--accent); background: white; }
+  .btn-danger:hover { background: var(--accent-dim); }
+  .icon-btn { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--ink-light); cursor: pointer; background: transparent; transition: all 0.15s; font-size: 14px; }
+  .icon-btn:hover { color: var(--ink); border-color: var(--border-mid); background: var(--parchment); }
+  .icon-btn.danger:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+
+  /* INGREDIENT ROWS */
+  .ing-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .ing-row { display: grid; grid-template-columns: 60px 90px 1fr 70px 28px; gap: 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border: 1px solid transparent; transition: background 0.1s, border-color 0.1s; }
+  .ing-row:hover { background: var(--parchment); }
+  .ing-row.selected { background: var(--blue-dim); border-color: rgba(26,74,122,0.2); }
+  .ing-row.batched { background: var(--gold-dim); border-color: rgba(184,134,11,0.2); }
+  .ing-row.batched-child { opacity: 0.5; pointer-events: none; }
+  .ing-qty { text-align: center; }
+  .ing-cost-cell { font-family: var(--mono); font-size: 11px; color: var(--ink-light); text-align: right; }
+  .ing-cost-cell.has-cost { color: var(--green); }
+  .ing-cost-cell.no-cost { color: var(--accent); }
+  .no-price-pill { display: inline-flex; align-items: center; gap: 3px; background: var(--accent-dim); color: var(--accent); padding: 1px 6px; border-radius: 10px; font-family: var(--mono); font-size: 10px; }
+  .neg-pill { color: var(--ink-ghost); font-family: var(--mono); font-size: 11px; font-style: italic; }
+
+  /* BATCH GROUP */
+  .batch-group { border: 1px solid rgba(184,134,11,0.35); border-radius: var(--radius); background: var(--gold-dim); margin-bottom: 6px; overflow: hidden; }
+  .batch-group-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: rgba(184,134,11,0.12); border-bottom: 1px solid rgba(184,134,11,0.2); }
+  .batch-group-name { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--gold); letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; }
+  .batch-group-cost { font-family: var(--mono); font-size: 11px; color: var(--gold); }
+  .batch-children { padding: 4px 6px; display: flex; flex-direction: column; gap: 3px; }
+  .batch-child-row { display: grid; grid-template-columns: 60px 90px 1fr 70px; gap: 6px; align-items: center; padding: 3px 4px; opacity: 0.8; }
+  .batch-child-label { font-size: 11px; color: var(--ink-mid); }
+
+  /* GROUP BUTTON BANNER */
+  .group-banner { display: none; background: var(--blue-dim); border: 1px solid rgba(26,74,122,0.25); border-radius: var(--radius); padding: 8px 12px; margin-bottom: 8px; align-items: center; justify-content: space-between; gap: 10px; }
+  .group-banner.show { display: flex; }
+  .group-banner-text { font-size: 12px; color: var(--blue); font-weight: 500; }
+
+  /* PILLS */
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { padding: 5px 14px; border: 1px solid var(--border-mid); border-radius: 20px; font-size: 12px; cursor: pointer; color: var(--ink-light); transition: all 0.15s; user-select: none; }
+  .pill:hover { border-color: var(--ink-mid); color: var(--ink); }
+  .pill.active { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
+  .pill.active-gold { background: var(--gold-dim); color: var(--gold); border-color: rgba(184,134,11,0.4); }
+
+  /* COSTING PANEL */
+  .costing-panel { position: sticky; top: 1rem; }
+  .builder-layout { display: grid; grid-template-columns: 1fr 240px; gap: 1rem; align-items: start; }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--ink-light); font-size: 12px; }
+  .stat-val { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+  .mock-slider-wrap { margin: 10px 0; }
+  .slider-row { display: flex; align-items: center; gap: 8px; }
+  .slider-label { font-size: 11px; color: var(--ink-light); min-width: 70px; }
+  input[type=range] { flex: 1; accent-color: var(--ink); }
+  .slider-val { font-family: var(--mono); font-size: 12px; font-weight: 500; min-width: 40px; text-align: right; }
+  .unpriced-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .unpriced-item { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .tag { padding: 2px 8px; border-radius: 20px; font-size: 11px; font-family: var(--mono); }
+  .tag-green { background: var(--green-dim); color: var(--green); }
+  .tag-gold { background: var(--gold-dim); color: var(--gold); }
+  .tag-blue { background: var(--blue-dim); color: var(--blue); }
+
+  /* BATCH CALC */
+  .batch-output { background: var(--parchment); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-top: 10px; }
+  .batch-output-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .batch-output-row:last-child { border-bottom: none; }
+  .batch-output-ing { color: var(--ink-mid); }
+  .batch-output-vol { font-family: var(--mono); font-size: 11px; color: var(--green); }
+
+  /* AUTOCOMPLETE */
+  .ac-wrap { position: relative; }
+  .ac-dropdown { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: white; border: 1px solid var(--border-mid); border-radius: var(--radius); z-index: 50; max-height: 220px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .ac-item { padding: 8px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover, .ac-item.focused { background: var(--parchment); }
+  .ac-item-name { font-weight: 500; }
+  .ac-item-sub { font-size: 11px; color: var(--ink-light); font-family: var(--mono); }
+  .ac-item-cost { font-family: var(--mono); font-size: 11px; color: var(--green); }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(26,24,18,0.55); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: var(--radius-lg); border: 1px solid var(--border); width: 100%; max-width: 440px; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
+  .modal-title { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.02em; }
+  .modal-body { padding: 1.25rem; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 1rem 1.25rem; border-top: 1px solid var(--border); background: var(--parchment-dark); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--ink); color: var(--parchment); padding: 10px 16px; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; font-weight: 500; border-left: 3px solid var(--accent); opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; z-index: 200; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* NEW RECIPE EMPTY STATE */
+  .builder-empty { text-align: center; padding: 4rem 2rem; color: var(--ink-light); }
+  .builder-empty-icon { font-size: 48px; opacity: 0.2; margin-bottom: 1rem; }
+  .builder-empty-title { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--ink-mid); margin-bottom: 8px; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+  .section-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">Hamlet <span>&</span> Ghost</div>
+  <div class="nav-links">
+    <a class="nav-link " href="hamlet-ghost-ingredients.html">Ingredients</a>
+    <a class="nav-link active" href="hamlet-ghost-recipes.html">Recipes</a>
+    <a class="nav-link " href="hamlet-ghost-grid.html">Menu Grid</a>
+    <a class="nav-link " href="hamlet-ghost-manager.html">Menu Manager</a>
+    <a class="nav-link " href="hamlet-ghost-dashboard.html">Dashboard</a>
+    <a class="nav-link " href="hamlet-ghost-specsheet.html">Spec Sheet</a>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+    <span id="nav-user" style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(200,196,188,0.6);letter-spacing:0.04em;"></span>
+    <button onclick="signOut()" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(200,196,188,0.7);padding:0 12px;height:28px;border-radius:4px;cursor:pointer;">Sign out</button>
+  </div>
+</div>
+</nav>
+
+<main class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Recipe Builder</div>
+      <div class="page-sub" id="recipe-count-sub">Loading recipes...</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="newRecipe()"><i class="ti ti-plus"></i> New recipe</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title">Recipes <span id="sidebar-count" style="margin-left:4px;background:var(--parchment-mid);padding:1px 6px;border-radius:10px;font-size:10px;">0</span></span>
+        <button class="btn btn-sm" onclick="newRecipe()"><i class="ti ti-plus"></i></button>
+      </div>
+      <div class="recipe-list" id="recipe-list">
+        <div class="sidebar-empty">No recipes yet.<br>Click + New recipe to start.</div>
+      </div>
+    </div>
+
+    <!-- BUILDER -->
+    <div id="builder-area">
+      <div class="builder-empty">
+        <div class="builder-empty-icon"><i class="ti ti-flask"></i></div>
+        <div class="builder-empty-title">No recipe selected</div>
+        <div style="font-size:13px;margin-bottom:1.5rem;">Create a new recipe or select one from the list.</div>
+        <button class="btn btn-primary" onclick="newRecipe()"><i class="ti ti-plus"></i> New recipe</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- BATCH NAME MODAL -->
+<div class="modal-overlay" id="batch-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Name this batch group</div>
+      <button class="icon-btn" onclick="closeModal('batch-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Batch bottle name</label>
+        <input type="text" class="form-input" id="batch-name-input" placeholder="e.g. Golden Negroni Batch">
+        <div style="font-size:11px;color:var(--ink-light);margin-top:5px;">This name will appear on the spec sheet as a single ingredient line.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('batch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmBatchGroup()">Create batch group</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Delete recipe?</div>
+      <button class="icon-btn" onclick="closeModal('delete-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--ink-mid);">This will permanently delete <strong id="delete-recipe-name"></strong>. This cannot be undone.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('delete-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDeleteRecipe()">Delete recipe</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://qgfrzhvgrilgxygoxjcn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Eq6r-RQzxU13f2A1sf3vHw_VoXb9tav';
+const LS_KEY = 'hg_app_data_v1';
+
+// ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
+async function sbRequest(method, path, body) {
+  const session = getSession();
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`
+  };
+  const res = await fetch(SUPABASE_URL + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+  return res.json().catch(() => null);
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function getSession() {
+  const raw = localStorage.getItem('hg_session');
+  if (!raw) return null;
+  try {
+    const session = JSON.parse(raw);
+    // Check if expired
+    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
+      localStorage.removeItem('hg_session');
+      return null;
+    }
+    return session;
+  } catch(e) { return null; }
+}
+
+async function signIn(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign in failed');
+  localStorage.setItem('hg_session', JSON.stringify(data));
+  return data;
+}
+
+async function signOut() {
+  const session = getSession();
+  if (session) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${session.access_token}` }
+    }).catch(() => {});
+  }
+  localStorage.removeItem('hg_session');
+  showLoginScreen();
+}
+
+function requireAuth() {
+  const session = getSession();
+  if (!session) {
+    showLoginScreen();
+    return false;
+  }
+  return true;
+}
+
+// ─── DATA LAYER ───────────────────────────────────────────────────────────────
+async function loadAppData() {
+  // Try Supabase first
+  try {
+    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+    if (rows && rows.length > 0 && rows[0].data) {
+      const data = rows[0].data;
+      // Update local cache
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+      return data;
+    }
+  } catch(e) {
+    console.warn('Supabase load failed, using local cache:', e.message);
+  }
+  // Fallback to localStorage cache
+  const cached = localStorage.getItem(LS_KEY);
+  if (cached) return JSON.parse(cached);
+  // Last resort: try old localStorage keys for migration
+  return migrateFromOldKeys();
+}
+
+async function saveAppData(data) {
+  // Always update local cache immediately
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+  // Save to Supabase
+  try {
+    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  } catch(e) {
+    console.warn('Supabase save failed, data cached locally:', e.message);
+  }
+}
+
+function migrateFromOldKeys() {
+  // Migrate from old separate localStorage keys
+  const spirits = localStorage.getItem('hg_spirits');
+  const other = localStorage.getItem('hg_other');
+  const recipes = localStorage.getItem('hg_recipes');
+  const menus = localStorage.getItem('hg_menus');
+  const importMeta = localStorage.getItem('hg_import_meta');
+  const salesData = localStorage.getItem('hg_sales_data');
+  
+  if (spirits || other || recipes || menus) {
+    const migrated = {
+      spirits: spirits ? JSON.parse(spirits) : [],
+      otherIngredients: other ? JSON.parse(other) : [],
+      recipes: recipes ? JSON.parse(recipes) : [],
+      menus: menus ? JSON.parse(menus) : [],
+      importMeta: importMeta ? JSON.parse(importMeta) : null,
+      salesData: salesData ? JSON.parse(salesData) : {}
+    };
+    console.log('Migrated data from old localStorage keys');
+    return migrated;
+  }
+  return { spirits: [], otherIngredients: [], recipes: [], menus: [], importMeta: null, salesData: {} };
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:#f5f2ec;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;">
+      <div style="background:white;border:1px solid rgba(26,24,18,0.1);border-radius:12px;padding:2.5rem;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <div style="text-align:center;margin-bottom:2rem;">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#1a1812;margin-bottom:4px;">Hamlet <span style="color:#c8392b;">&</span> Ghost</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#8a8680;">Cocktail Manager</div>
+        </div>
+        <div id="login-error" style="display:none;background:#f5e8e6;color:#c8392b;padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:1rem;"></div>
+        <div style="margin-bottom:12px;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Email</label>
+          <input type="email" id="login-email" placeholder="your@email.com" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:1.5rem;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button onclick="doLogin()" id="login-btn" style="width:100%;height:40px;background:#1a1812;color:#f5f2ec;border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Sign in</button>
+      </div>
+    </div>`;
+  // Re-import fonts since we wiped body
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap';
+  document.head.appendChild(link);
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  if (!email || !password) {
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.textContent = 'Signing in...';
+  btn.disabled = true;
+  errEl.style.display = 'none';
+  try {
+    await signIn(email, password);
+    window.location.reload();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.textContent = 'Sign in';
+    btn.disabled = false;
+  }
+}
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let recipes = [];
+let spirits = [];
+let otherIngredients = [];
+let currentRecipeId = null;
+let pendingBatchRows = [];
+let activeAcRow = null;
+let cogsTarget = 20;
+
+const GLASS_OPTIONS = ['Small Rocks','Dbl Rocks','Collins','Hurricane','Coupe','Egg White Coupe','Martini','Angled Pint','Fancy Rocks','Jet Pilot','Square Side Coupe','Mug','Pint','Fancy Beer','Fizz','Snifter'];
+const ICE_OPTIONS = ['Rocks','Big Cube','Collins Cube','Crushed','No Ice'];
+const FLAVOR_OPTIONS = ['Citrusy','Boozy','Bitter','Herbal','Sweet','Smoky','Savory','Tropical','Floral','Spicy'];
+const STYLE_OPTIONS = ['Stirred','Shaken','Built','Carbonated','Frozen'];
+const FAMILY_OPTIONS = ['Old Fashioned Family','Manhattan Family','Martini Family','Negroni Family','Classic Sour','Egg White / Foam Sour','Collins','Fizz','Highball','Aperitivo Style','Digestivo / Black Manhattan Style','Classic Tiki','Modern Tropical','Cream / Dessert Cocktails','Hot Cocktails','Savory / Culinary Cocktails','Carbonated Cocktails','Clarified Cocktails','Frozen Cocktails','Zero-Proof Cocktails'];
+const UNIT_OPTIONS = ['oz','ml','dash','barspoon','rinse','whole','tsp','tbsp'];
+const NEGLIGIBLE_UNITS = ['dash','barspoon','rinse'];
+
+// ─── LOAD ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  if (!requireAuth()) return;
+  const session = getSession();
+  if (session && session.user) {
+    const el = document.getElementById('nav-user');
+    if (el) el.textContent = session.user.email;
+  }
+  const rs = localStorage.getItem('hg_recipes');
+  const sp = localStorage.getItem('hg_spirits');
+  const ot = localStorage.getItem('hg_other');
+  if (rs) recipes = JSON.parse(rs);
+  if (sp) spirits = JSON.parse(sp);
+  if (ot) otherIngredients = JSON.parse(ot);
+  seedBarPrepRecipes();
+  seedCocktailRecipes();
+  // reload after seed
+  const appData2 = await loadAppData();
+  recipes = appData2.recipes || [];
+  renderSidebar();
+  updateSubtitle();
+  // Auto-load recipe if coming from grid
+  const editTarget = localStorage.getItem('hg_edit_recipe');
+  if (editTarget) {
+    localStorage.removeItem('hg_edit_recipe');
+    const target = recipes.find(r => r.id === editTarget);
+    if (target) { currentRecipeId = editTarget; renderSidebar(); renderBuilder(target); }
+  }
+});
+
+async function saveRecipes() {
+  const data = await loadAppData();
+  data.recipes = recipes;
+  await saveAppData(data);
+}
+
+function updateSubtitle() {
+  document.getElementById('recipe-count-sub').textContent =
+    recipes.length === 0 ? 'No recipes yet — build your menu'
+    : `${recipes.length} recipe${recipes.length !== 1 ? 's' : ''} · click any to edit`;
+}
+
+// ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('recipe-list');
+  document.getElementById('sidebar-count').textContent = recipes.length;
+  if (recipes.length === 0) {
+    list.innerHTML = `<div class="sidebar-empty">No recipes yet.<br>Click + New recipe to start.</div>`;
+    return;
+  }
+  const cocktails = recipes.filter(r => r.recipeType !== 'barprep');
+  const barprep = recipes.filter(r => r.recipeType === 'barprep');
+
+  const renderGroup = (items, label) => {
+    if (items.length === 0) return '';
+    return `
+      <div style="padding:6px 14px 4px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-ghost);background:var(--parchment-dark);border-bottom:1px solid var(--border);">${label}</div>
+      ${items.map(r => {
+        const cogsClass = getCOGSClass(r);
+        const cogsLabel = getCogsLabel(r);
+        return `<div class="recipe-item ${currentRecipeId === r.id ? 'active' : ''}" onclick="loadRecipe('${r.id}')">
+          <div style="flex:1;min-width:0;">
+            <div class="ri-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name || 'Untitled'}</div>
+            <div class="ri-meta">${r.recipeType === 'barprep' ? 'Bar prep' : (r.bartender || '—') + ' · ' + (r.style || '—')}</div>
+          </div>
+          <div class="ri-cogs ${cogsClass}">${cogsLabel}</div>
+        </div>`;
+      }).join('')}`;
+  };
+
+  list.innerHTML = renderGroup(cocktails, 'Cocktails') + renderGroup(barprep, 'Bar Prep');
+}
+
+function getCOGSClass(r) {
+  const pct = calcPourCost(r);
+  if (pct === null) return 'cogs-unknown';
+  if (pct <= cogsTarget) return 'cogs-ok';
+  if (pct <= cogsTarget * 1.25) return 'cogs-warn';
+  return 'cogs-bad';
+}
+
+function getCogsLabel(r) {
+  const pct = calcPourCost(r);
+  if (pct === null) return '—%';
+  return `${pct.toFixed(1)}%`;
+}
+
+function calcPourCost(r) {
+  if (!r.menuPrice || r.menuPrice <= 0) return null;
+  const cost = calcTotalCost(r);
+  if (cost === null) return null;
+  return (cost / r.menuPrice) * 100;
+}
+
+function calcTotalCost(r) {
+  if (!r.ingredients || r.ingredients.length === 0) return null;
+  let total = 0;
+  let hasAny = false;
+  for (const ing of r.ingredients) {
+    if (ing.isBatchGroup) {
+      for (const child of (ing.children || [])) {
+        const c = getCostForRow(child);
+        if (c !== null) { total += c; hasAny = true; }
+      }
+      continue;
+    }
+    if (NEGLIGIBLE_UNITS.includes(ing.unit)) continue;
+    const c = getCostForRow(ing);
+    if (c !== null) { total += c; hasAny = true; }
+  }
+  return hasAny ? total : null;
+}
+
+function getCostForRow(row) {
+  if (!row.ingredientId || NEGLIGIBLE_UNITS.includes(row.unit)) return null;
+  const ing = findIngredient(row.ingredientId);
+  if (!ing) return null;
+  const qty = parseFloat(row.qty) || 0;
+  if (qty === 0) return null;
+  if (row.unit === 'oz') {
+    if (!ing.costPerOz || ing.costPerOz === 0) return null;
+    return qty * ing.costPerOz;
+  }
+  if (row.unit === 'ml') {
+    if (!ing.costPerOz || ing.costPerOz === 0) return null;
+    return (qty / 29.5735) * ing.costPerOz;
+  }
+  // Other units: treat as oz equivalent
+  if (!ing.costPerOz || ing.costPerOz === 0) return null;
+  return qty * ing.costPerOz;
+}
+
+function findIngredient(id) {
+  return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || null;
+}
+
+// ─── NEW / LOAD RECIPE ────────────────────────────────────────────────────────
+function newRecipe() {
+  const r = {
+    id: crypto.randomUUID(),
+    name: '', bartender: '', glass: 'Coupe', garnish: '',
+    menuPrice: null, summary: '',
+    style: '', dilute: false,
+    ice: '', flavor: [], family: '',
+    recipeType: 'cocktail',
+    ingredients: [],
+    batchQty: 1,
+    createdAt: Date.now()
+  };
+  recipes.unshift(r);
+  saveRecipes();
+  currentRecipeId = r.id;
+  renderSidebar();
+  renderBuilder(r);
+  updateSubtitle();
+  setTimeout(() => document.getElementById('r-name')?.focus(), 50);
+}
+
+function loadRecipe(id) {
+  currentRecipeId = id;
+  const r = recipes.find(r => r.id === id);
+  if (!r) return;
+  renderSidebar();
+  renderBuilder(r);
+}
+
+// ─── RENDER BUILDER ───────────────────────────────────────────────────────────
+function renderBuilder(r) {
+  if (r.recipeType === 'barprep') {
+    renderBarPrepBuilder(r);
+    return;
+  }
+  document.getElementById('builder-area').innerHTML = `
+  <div class="builder-layout">
+    <div class="builder">
+
+      <!-- META CARD -->
+      <div class="card">
+        <div class="card-title">Recipe info</div>
+        <div style="display:flex;gap:6px;margin-bottom:1rem;">
+          <div class="pill ${r.recipeType!=='barprep'?'active':''}" onclick="setRecipeType('cocktail')" style="font-size:11px;padding:4px 12px;">
+            <i class="ti ti-glass" style="font-size:11px;"></i> Cocktail
+          </div>
+          <div class="pill ${r.recipeType==='barprep'?'active':''}" onclick="setRecipeType('barprep')" style="font-size:11px;padding:4px 12px;">
+            <i class="ti ti-tool" style="font-size:11px;"></i> Bar Prep
+          </div>
+        </div>
+        <div class="form-grid-2" style="margin-bottom:10px;">
+          <div class="form-group">
+            <label class="form-label">Cocktail name</label>
+            <input type="text" class="form-input" id="r-name" placeholder="e.g. The Diplomat" value="${esc(r.name)}" oninput="updateField('name',this.value)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Created by</label>
+            <input type="text" class="form-input" id="r-bartender" placeholder="Bartender name" value="${esc(r.bartender)}" oninput="updateField('bartender',this.value)">
+          </div>
+        </div>
+        <div class="form-grid-3" style="margin-bottom:10px;">
+          <div class="form-group">
+            <label class="form-label">Glass</label>
+            <select class="form-select" id="r-glass" onchange="updateField('glass',this.value)">
+              ${GLASS_OPTIONS.map(g => `<option value="${g}" ${r.glass===g?'selected':''}>${g}</option>`).join('')}
+              <option value="__custom__">+ Add glass type</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Garnish</label>
+            <input type="text" class="form-input" id="r-garnish" placeholder="e.g. Orange twist" value="${esc(r.garnish)}" oninput="updateField('garnish',this.value)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Menu price ($)</label>
+            <input type="number" class="form-input" id="r-price" placeholder="0.00" step="0.50" value="${r.menuPrice||''}" oninput="updateField('menuPrice',parseFloat(this.value)||null);updateCosting()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ingredient summary / notes</label>
+          <textarea class="form-textarea" id="r-summary" placeholder="Short description for menu grid and spec sheet..." oninput="updateField('summary',this.value)">${esc(r.summary)}</textarea>
+        </div>
+      </div>
+
+      <!-- INGREDIENTS CARD -->
+      <div class="card">
+        <div class="section-row">
+          <div class="card-title" style="margin-bottom:0;">Ingredients</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <div class="group-banner" id="group-banner">
+              <span class="group-banner-text"><i class="ti ti-stack-2" style="font-size:13px;vertical-align:-2px;"></i> <span id="group-count">0</span> ingredients selected</span>
+              <button class="btn btn-sm" style="background:var(--blue);color:white;border-color:var(--blue);" onclick="openBatchModal()"><i class="ti ti-stack-2"></i> Group as batch</button>
+              <button class="btn btn-sm btn-ghost" onclick="clearSelection()">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <div style="display:grid;grid-template-columns:60px 90px 1fr 70px 28px;gap:6px;padding:0 8px 6px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-ghost);">
+            <span>Qty</span><span>Unit</span><span>Ingredient</span><span style="text-align:right;">Cost</span><span></span>
+          </div>
+          <div class="ing-rows" id="ing-rows">
+            ${renderIngredientRows(r)}
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="addIngredientRow()" style="margin-top:4px;">
+            <i class="ti ti-plus"></i> Add ingredient
+          </button>
+        </div>
+      </div>
+
+      <!-- STYLE CARD -->
+      <div class="card">
+        <div class="card-title">Style & classification</div>
+        <div style="margin-bottom:1rem;">
+          <div class="form-label" style="margin-bottom:8px;">Preparation style</div>
+          <div class="pills">
+            ${STYLE_OPTIONS.map(s => `<div class="pill ${r.style===s?'active':''}" onclick="toggleStyle('${s}')">${s}</div>`).join('')}
+          </div>
+        </div>
+        <div style="margin-bottom:1rem;">
+          <div class="form-label" style="margin-bottom:8px;">Ice</div>
+          <div class="pills">
+            ${ICE_OPTIONS.map(i => `<div class="pill ${r.ice===i?'active':''}" onclick="toggleIce('${i}')">${i}</div>`).join('')}
+          </div>
+        </div>
+        <div style="margin-bottom:1rem;">
+          <div class="form-label" style="margin-bottom:8px;">Flavor profile <span style="font-style:normal;color:var(--ink-ghost);font-family:var(--sans);text-transform:none;letter-spacing:0;font-size:10px;">(select all that apply)</span></div>
+          <div class="pills">
+            ${FLAVOR_OPTIONS.map(f => `<div class="pill ${(r.flavor||[]).includes(f)?'active':''}" onclick="toggleFlavor('${f}')">${f}</div>`).join('')}
+          </div>
+        </div>
+        <div>
+          <div class="form-label" style="margin-bottom:8px;">Cocktail family</div>
+          <select class="form-select" style="max-width:320px;" onchange="updateField('family',this.value)">
+            <option value="">— Select family —</option>
+            ${FAMILY_OPTIONS.map(f => `<option value="${f}" ${r.family===f?'selected':''}>${f}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- BATCH CARD -->
+      <div class="card">
+        <div class="card-title">Batching</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div class="form-group" style="flex-direction:row;align-items:center;gap:10px;">
+            <label class="form-label" style="white-space:nowrap;margin-bottom:0;">Drinks per batch</label>
+            <input type="number" class="form-input" style="width:80px;" id="r-batchqty" value="${r.batchQty||1}" min="1" oninput="updateField('batchQty',parseInt(this.value)||1);renderBatchOutput()">
+          </div>
+        </div>
+        <div id="batch-output"></div>
+      </div>
+
+    </div>
+
+    <!-- COSTING PANEL -->
+    <div class="costing-panel">
+      <div class="card" id="costing-card">
+        <div class="card-title">Costing</div>
+        <div id="costing-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAVE BAR -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+    <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${r.id}')"><i class="ti ti-trash"></i> Delete recipe</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="duplicateRecipe('${r.id}')"><i class="ti ti-copy"></i> Duplicate</button>
+      <button class="btn btn-primary" onclick="saveCurrentRecipe()"><i class="ti ti-device-floppy"></i> Save recipe</button>
+    </div>
+  </div>
+  `;
+
+  attachGlassListener();
+  updateCosting();
+  renderBatchOutput();
+}
+
+function esc(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── INGREDIENT ROWS ──────────────────────────────────────────────────────────
+function renderIngredientRows(r) {
+  if (!r.ingredients || r.ingredients.length === 0) return '';
+  return r.ingredients.map((ing, idx) => {
+    if (ing.isBatchGroup) return renderBatchGroupRow(ing, idx);
+    return renderSingleRow(ing, idx);
+  }).join('');
+}
+
+function renderSingleRow(ing, idx) {
+  const cost = getCostForRow(ing);
+  const isNeg = NEGLIGIBLE_UNITS.includes(ing.unit);
+  const costHTML = isNeg
+    ? `<span class="neg-pill">neg.</span>`
+    : cost !== null
+      ? `<span class="ing-cost-cell has-cost">$${cost.toFixed(3)}</span>`
+      : ing.ingredientId
+        ? `<span class="no-price-pill"><i class="ti ti-alert-triangle" style="font-size:10px;"></i> ?</span>`
+        : `<span class="ing-cost-cell">—</span>`;
+
+  return `<div class="ing-row" id="row-${idx}" data-idx="${idx}">
+    <input type="number" class="form-input ing-qty" style="height:30px;font-size:12px;font-family:var(--mono);text-align:center;" value="${ing.qty||''}" placeholder="0" min="0" step="0.25" oninput="updateIngField(${idx},'qty',this.value);updateCosting()">
+    <select class="form-select" style="height:30px;font-size:12px;" onchange="updateIngField(${idx},'unit',this.value);updateCosting()">
+      ${UNIT_OPTIONS.map(u => `<option value="${u}" ${ing.unit===u?'selected':''}>${u}</option>`).join('')}
+    </select>
+    <div class="ac-wrap">
+      <input type="text" class="form-input" style="height:30px;font-size:12px;" placeholder="Search ingredients..." value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
+      <div class="ac-dropdown" id="ac-drop-${idx}" style="display:none;"></div>
+    </div>
+    <div style="text-align:right;padding-right:4px;">${costHTML}</div>
+    <div style="display:flex;gap:2px;">
+      <div class="icon-btn" onclick="toggleRowSelect(${idx})" title="Select for batch grouping" style="font-size:12px;"><i class="ti ti-checkbox"></i></div>
+      <div class="icon-btn danger" onclick="removeIngRow(${idx})" style="font-size:12px;"><i class="ti ti-trash"></i></div>
+    </div>
+  </div>`;
+}
+
+function renderBatchGroupRow(ing, idx) {
+  const groupCost = (ing.children || []).reduce((sum, child) => {
+    const c = getCostForRow(child);
+    return sum + (c || 0);
+  }, 0);
+  return `<div class="batch-group" id="row-${idx}" data-idx="${idx}">
+    <div class="batch-group-header">
+      <div class="batch-group-name">
+        <i class="ti ti-stack-2" style="font-size:13px;"></i>
+        <input type="text" style="background:transparent;border:none;outline:none;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--gold);width:200px;" value="${esc(ing.batchName||'Batch Group')}" onchange="updateBatchName(${idx},this.value)">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="batch-group-cost">$${groupCost.toFixed(3)}</span>
+        <div class="icon-btn danger" onclick="unbatchGroup(${idx})" title="Ungroup" style="font-size:12px;"><i class="ti ti-unlink"></i></div>
+        <div class="icon-btn danger" onclick="removeIngRow(${idx})" style="font-size:12px;"><i class="ti ti-trash"></i></div>
+      </div>
+    </div>
+    <div class="batch-children">
+      ${(ing.children||[]).map((child, ci) => `
+        <div class="batch-child-row">
+          <input type="number" class="form-input" style="height:26px;font-size:11px;font-family:var(--mono);text-align:center;" value="${child.qty||''}" placeholder="0" step="0.25" oninput="updateBatchChild(${idx},${ci},'qty',this.value);updateCosting()">
+          <select class="form-select" style="height:26px;font-size:11px;" onchange="updateBatchChild(${idx},${ci},'unit',this.value);updateCosting()">
+            ${UNIT_OPTIONS.map(u => `<option value="${u}" ${child.unit===u?'selected':''}>${u}</option>`).join('')}
+          </select>
+          <span class="batch-child-label">${esc(child.ingredientName||'—')}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--green);text-align:right;">${getCostForRow(child)!==null?'$'+getCostForRow(child).toFixed(3):'—'}</span>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+function addIngredientRow() {
+  const r = currentRecipe();
+  if (!r) return;
+  r.ingredients.push({ id: crypto.randomUUID(), qty: '', unit: 'oz', ingredientId: null, ingredientName: '' });
+  saveRecipes();
+  refreshIngRows();
+}
+
+function removeIngRow(idx) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.ingredients.splice(idx, 1);
+  saveRecipes();
+  refreshIngRows();
+  updateCosting();
+}
+
+function updateIngField(idx, field, val) {
+  const r = currentRecipe();
+  if (!r || !r.ingredients[idx]) return;
+  r.ingredients[idx][field] = val;
+  saveRecipes();
+  if (field === 'unit') refreshIngRows();
+}
+
+function updateBatchChild(groupIdx, childIdx, field, val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.ingredients[groupIdx].children[childIdx][field] = val;
+  saveRecipes();
+}
+
+function updateBatchName(idx, val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.ingredients[idx].batchName = val;
+  saveRecipes();
+}
+
+function refreshIngRows() {
+  const r = currentRecipe();
+  if (!r) return;
+  document.getElementById('ing-rows').innerHTML = renderIngredientRows(r);
+  renderBatchOutput();
+}
+
+// ─── AUTOCOMPLETE ─────────────────────────────────────────────────────────────
+function acSearch(idx, query) {
+  activeAcRow = idx;
+  const drop = document.getElementById(`ac-drop-${idx}`);
+  if (!drop) return;
+  const q = query.toLowerCase().trim();
+  const all = [...spirits, ...otherIngredients];
+  const results = q.length < 1
+    ? all.slice(0, 10)
+    : all.filter(i => {
+        const full = `${i.brand||''} ${i.name||''}`.toLowerCase();
+        return full.includes(q);
+      }).slice(0, 12);
+
+  if (results.length === 0) { drop.style.display = 'none'; return; }
+  drop.style.display = 'block';
+  drop.innerHTML = results.map((ing, i) => {
+    const displayName = [ing.brand, ing.name].filter(Boolean).join(' — ');
+    const costLabel = ing.costPerOz ? `$${ing.costPerOz.toFixed(3)}/oz` : '⚠ unpriced';
+    return `<div class="ac-item" data-i="${i}" onmousedown="selectIngredient(${idx},'${ing.id}','${esc(displayName)}')" >
+      <div><div class="ac-item-name">${displayName}</div><div class="ac-item-sub">${ing.subcategory||ing.category||''}</div></div>
+      <div class="ac-item-cost">${costLabel}</div>
+    </div>`;
+  }).join('');
+}
+
+function acKeyNav(e, idx) {
+  const drop = document.getElementById(`ac-drop-${idx}`);
+  if (!drop || drop.style.display === 'none') return;
+  const items = drop.querySelectorAll('.ac-item');
+  const focused = drop.querySelector('.focused');
+  let fi = -1;
+  items.forEach((item, i) => { if (item === focused) fi = i; });
+  if (e.key === 'ArrowDown') { e.preventDefault(); fi = Math.min(fi + 1, items.length - 1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); fi = Math.max(fi - 1, 0); }
+  if (e.key === 'Enter' && focused) { e.preventDefault(); focused.dispatchEvent(new MouseEvent('mousedown')); return; }
+  if (e.key === 'Escape') { drop.style.display = 'none'; return; }
+  items.forEach(i => i.classList.remove('focused'));
+  if (fi >= 0) items[fi].classList.add('focused');
+}
+
+function selectIngredient(idx, ingId, displayName) {
+  const r = currentRecipe();
+  if (!r || !r.ingredients[idx]) return;
+  r.ingredients[idx].ingredientId = ingId;
+  r.ingredients[idx].ingredientName = displayName;
+  saveRecipes();
+  const input = document.getElementById(`ac-input-${idx}`);
+  const drop = document.getElementById(`ac-drop-${idx}`);
+  if (input) input.value = displayName;
+  if (drop) drop.style.display = 'none';
+  updateCosting();
+  refreshCostCells();
+}
+
+function refreshCostCells() {
+  const r = currentRecipe();
+  if (!r) return;
+  r.ingredients.forEach((ing, idx) => {
+    if (ing.isBatchGroup) return;
+    const row = document.getElementById(`row-${idx}`);
+    if (!row) return;
+    const costDiv = row.querySelector('[style*="text-align:right"]');
+    if (!costDiv) return;
+    const cost = getCostForRow(ing);
+    const isNeg = NEGLIGIBLE_UNITS.includes(ing.unit);
+    costDiv.innerHTML = isNeg
+      ? `<span class="neg-pill">neg.</span>`
+      : cost !== null
+        ? `<span class="ing-cost-cell has-cost">$${cost.toFixed(3)}</span>`
+        : ing.ingredientId
+          ? `<span class="no-price-pill"><i class="ti ti-alert-triangle" style="font-size:10px;"></i> ?</span>`
+          : `<span class="ing-cost-cell">—</span>`;
+  });
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ac-wrap')) {
+    document.querySelectorAll('.ac-dropdown').forEach(d => d.style.display = 'none');
+  }
+});
+
+// ─── BATCH GROUPING ───────────────────────────────────────────────────────────
+function toggleRowSelect(idx) {
+  const r = currentRecipe();
+  if (!r || !r.ingredients[idx] || r.ingredients[idx].isBatchGroup) return;
+  r.ingredients[idx].selected = !r.ingredients[idx].selected;
+  const row = document.getElementById(`row-${idx}`);
+  if (row) row.classList.toggle('selected', r.ingredients[idx].selected);
+  updateGroupBanner();
+}
+
+function updateGroupBanner() {
+  const r = currentRecipe();
+  if (!r) return;
+  const selected = r.ingredients.filter(i => i.selected && !i.isBatchGroup);
+  const banner = document.getElementById('group-banner');
+  if (!banner) return;
+  if (selected.length >= 2) {
+    banner.classList.add('show');
+    document.getElementById('group-count').textContent = selected.length;
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
+function openBatchModal() {
+  document.getElementById('batch-name-input').value = '';
+  document.getElementById('batch-modal').classList.add('open');
+  setTimeout(() => document.getElementById('batch-name-input').focus(), 50);
+}
+
+function confirmBatchGroup() {
+  const name = document.getElementById('batch-name-input').value.trim();
+  if (!name) { showToast('Enter a batch name'); return; }
+  const r = currentRecipe();
+  if (!r) return;
+  const children = r.ingredients.filter(i => i.selected && !i.isBatchGroup);
+  const remaining = r.ingredients.filter(i => !i.selected || i.isBatchGroup);
+  const batchGroup = {
+    id: crypto.randomUUID(),
+    isBatchGroup: true,
+    batchName: name,
+    children: children.map(c => ({ ...c, selected: false }))
+  };
+  // Insert batch group where the first selected item was
+  const firstIdx = r.ingredients.findIndex(i => i.selected);
+  remaining.splice(firstIdx, 0, batchGroup);
+  r.ingredients = remaining;
+  saveRecipes();
+  closeModal('batch-modal');
+  refreshIngRows();
+  updateCosting();
+  showToast(`✓ Created batch group: ${name}`);
+}
+
+function unbatchGroup(idx) {
+  const r = currentRecipe();
+  if (!r) return;
+  const group = r.ingredients[idx];
+  if (!group.isBatchGroup) return;
+  r.ingredients.splice(idx, 1, ...group.children.map(c => ({ ...c, selected: false })));
+  saveRecipes();
+  refreshIngRows();
+  updateCosting();
+  showToast('Batch group ungrouped');
+}
+
+function clearSelection() {
+  const r = currentRecipe();
+  if (!r) return;
+  r.ingredients.forEach(i => i.selected = false);
+  saveRecipes();
+  refreshIngRows();
+  updateGroupBanner();
+}
+
+// ─── STYLE / ICE / FLAVOR ─────────────────────────────────────────────────────
+function toggleStyle(val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.style = r.style === val ? '' : val;
+  saveRecipes();
+  document.querySelectorAll('.pills .pill').forEach(p => {
+    if (STYLE_OPTIONS.includes(p.textContent)) p.classList.toggle('active', p.textContent === r.style);
+  });
+  updateCosting();
+}
+
+function toggleIce(val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.ice = r.ice === val ? '' : val;
+  saveRecipes();
+  refreshStyleSection();
+}
+
+function toggleFlavor(val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.flavor = r.flavor || [];
+  const idx = r.flavor.indexOf(val);
+  if (idx === -1) r.flavor.push(val);
+  else r.flavor.splice(idx, 1);
+  saveRecipes();
+  refreshStyleSection();
+}
+
+function refreshStyleSection() {
+  // Re-render just the pills without full rebuild
+  document.querySelectorAll('.pills').forEach(group => {
+    const r = currentRecipe();
+    if (!r) return;
+    group.querySelectorAll('.pill').forEach(pill => {
+      const txt = pill.textContent.trim();
+      if (ICE_OPTIONS.includes(txt)) pill.classList.toggle('active', r.ice === txt);
+      if (FLAVOR_OPTIONS.includes(txt)) pill.classList.toggle('active', (r.flavor||[]).includes(txt));
+      if (STYLE_OPTIONS.includes(txt)) pill.classList.toggle('active', r.style === txt);
+    });
+  });
+}
+
+// ─── COSTING PANEL ────────────────────────────────────────────────────────────
+function updateCosting() {
+  const r = currentRecipe();
+  const el = document.getElementById('costing-content');
+  if (!r || !el) return;
+
+  const totalCost = calcTotalCost(r);
+  const menuPrice = r.menuPrice || 0;
+  const pourCost = menuPrice > 0 && totalCost !== null ? (totalCost / menuPrice) * 100 : null;
+  const target = cogsTarget;
+  const suggestedPrice = totalCost !== null ? totalCost / (target / 100) : null;
+
+  // Unpriced ingredients
+  const unpriced = (r.ingredients || []).filter(ing => {
+    if (ing.isBatchGroup) return (ing.children||[]).some(c => c.ingredientId && !findIngredient(c.ingredientId)?.costPerOz);
+    return ing.ingredientId && !NEGLIGIBLE_UNITS.includes(ing.unit) && !findIngredient(ing.ingredientId)?.costPerOz;
+  });
+
+  const pourCostColor = pourCost === null ? 'var(--ink-light)'
+    : pourCost <= target ? 'var(--green)'
+    : pourCost <= target * 1.25 ? 'var(--gold)'
+    : 'var(--accent)';
+
+  const tags = [...(r.style ? [{ label: r.style, cls: 'tag-green' }] : []),
+    ...(r.ice ? [{ label: r.ice, cls: 'tag-gold' }] : []),
+    ...(r.flavor||[]).slice(0,2).map(f => ({ label: f, cls: 'tag-blue' }))];
+
+  el.innerHTML = `
+    <div class="stat-row">
+      <span class="stat-label">Ingredient cost</span>
+      <span class="stat-val">${totalCost !== null ? '$' + totalCost.toFixed(2) : '—'}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Menu price</span>
+      <span class="stat-val">${menuPrice ? '$' + menuPrice.toFixed(2) : '—'}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Pour cost</span>
+      <span class="stat-val" style="color:${pourCostColor};">${pourCost !== null ? pourCost.toFixed(1) + '%' : '—'}</span>
+    </div>
+    <div class="stat-row" style="border-bottom:none;padding-bottom:0;">
+      <span class="stat-label">Target COGS</span>
+      <span class="stat-val">${target}%</span>
+    </div>
+
+    <div class="divider"></div>
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-light);margin-bottom:10px;">Adjust menu price</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <button onclick="nudgePrice(-0.5)" style="width:32px;height:32px;border:1px solid var(--border-mid);border-radius:var(--radius);background:var(--parchment);cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;">−</button>
+      <div style="flex:1;text-align:center;font-family:var(--mono);font-size:20px;font-weight:500;" id="price-display">${menuPrice ? '$' + menuPrice.toFixed(2) : '—'}</div>
+      <button onclick="nudgePrice(0.5)" style="width:32px;height:32px;border:1px solid var(--border-mid);border-radius:var(--radius);background:var(--parchment);cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;">+</button>
+    </div>
+    <input type="range" min="8" max="40" step="0.5" value="${menuPrice||16}" id="price-slider" oninput="updateMenuPriceSlider(this.value)" style="width:100%;accent-color:var(--ink);margin-bottom:6px;">
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--ink-ghost);margin-bottom:8px;"><span>$8</span><span>$40</span></div>
+    ${suggestedPrice !== null ? `<div style="font-size:11px;color:var(--ink-light);padding:7px 10px;background:var(--parchment);border-radius:var(--radius);border:1px solid var(--border);">To hit ${target}%: <strong style="color:var(--ink);">$\${suggestedPrice.toFixed(2)}</strong></div>` : ''}
+
+    ${unpriced.length > 0 ? `
+    <div class="divider"></div>
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;">Unpriced ingredients</div>
+    <div class="unpriced-list">
+      ${unpriced.map(u => `<div class="unpriced-item"><span style="font-size:12px;">${u.ingredientName||u.batchName||'—'}</span><a href="hamlet-ghost-ingredients.html" style="font-size:11px;color:var(--blue);text-decoration:none;font-family:var(--mono);">Add price →</a></div>`).join('')}
+    </div>` : ''}
+
+    ${tags.length > 0 ? `
+    <div class="divider"></div>
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-light);margin-bottom:6px;">Menu tags</div>
+    <div class="tag-list">${tags.map(t => `<span class="tag ${t.cls}">${t.label}</span>`).join('')}</div>
+    <div style="font-size:10px;color:var(--ink-ghost);margin-top:6px;">Feed the dashboard automatically.</div>` : ''}
+  `;
+}
+
+function updateMenuPriceSlider(val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.menuPrice = parseFloat(val);
+  syncPriceInputs(r.menuPrice);
+  saveRecipes();
+  updateCosting();
+  renderSidebar();
+}
+
+function nudgePrice(delta) {
+  const r = currentRecipe();
+  if (!r) return;
+  const current = parseFloat(r.menuPrice) || 14;
+  r.menuPrice = Math.round((current + delta) * 100) / 100;
+  r.menuPrice = Math.max(1, r.menuPrice);
+  syncPriceInputs(r.menuPrice);
+  const slider = document.getElementById('price-slider');
+  if (slider) slider.value = r.menuPrice;
+  saveRecipes();
+  updateCosting();
+  renderSidebar();
+}
+
+function syncPriceInputs(price) {
+  const priceInput = document.getElementById('r-price');
+  if (priceInput) priceInput.value = price.toFixed(2);
+  const display = document.getElementById('price-display');
+  if (display) display.textContent = '$' + price.toFixed(2);
+}
+
+// ─── BATCH OUTPUT ─────────────────────────────────────────────────────────────
+function renderBatchOutput() {
+  const r = currentRecipe();
+  const el = document.getElementById('batch-output');
+  if (!r || !el) return;
+  const qty = parseInt(r.batchQty) || 1;
+  const rows = [];
+  (r.ingredients || []).forEach(ing => {
+    if (ing.isBatchGroup) {
+      (ing.children||[]).forEach(child => {
+        if (child.ingredientName && child.qty) rows.push({ name: child.ingredientName, qty: parseFloat(child.qty), unit: child.unit });
+      });
+    } else if (ing.ingredientName && ing.qty && !NEGLIGIBLE_UNITS.includes(ing.unit)) {
+      rows.push({ name: ing.ingredientName, qty: parseFloat(ing.qty), unit: ing.unit });
+    }
+  });
+
+  if (rows.length === 0) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;">Add ingredients above to see batch output.</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="font-size:12px;color:var(--ink-light);margin-bottom:8px;">Scaled to <strong style="color:var(--ink);">${qty} drinks</strong></div>
+  <div class="batch-output">
+    ${rows.map(row => {
+      const totalOz = row.unit === 'ml' ? (row.qty * qty / 29.5735) : row.qty * qty;
+      const totalMl = row.unit === 'ml' ? row.qty * qty : row.qty * qty * 29.5735;
+      return `<div class="batch-output-row">
+        <span class="batch-output-ing">${row.name}</span>
+        <span class="batch-output-vol">${totalOz.toFixed(1)} oz / ${Math.round(totalMl)} mL</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── FIELD UPDATES ────────────────────────────────────────────────────────────
+function updateField(field, val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r[field] = val;
+  saveRecipes();
+  if (['name','style','menuPrice'].includes(field)) renderSidebar();
+}
+
+function setRecipeType(type) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.recipeType = type;
+  saveRecipes();
+  renderSidebar();
+  renderBuilder(r);
+}
+
+// ─── GLASS CUSTOM ────────────────────────────────────────────────────────────
+function attachGlassListener() {
+  const sel = document.getElementById('r-glass');
+  if (!sel) return;
+  sel.addEventListener('change', () => {
+    if (sel.value === '__custom__') {
+      const name = prompt('New glass type name:');
+      if (name && name.trim()) {
+        GLASS_OPTIONS.push(name.trim());
+        const opt = document.createElement('option');
+        opt.value = name.trim();
+        opt.textContent = name.trim();
+        sel.insertBefore(opt, sel.querySelector('[value="__custom__"]'));
+        sel.value = name.trim();
+        updateField('glass', name.trim());
+        showToast(`✓ Added glass type: ${name.trim()}`);
+      } else {
+        sel.value = currentRecipe()?.glass || GLASS_OPTIONS[0];
+      }
+    }
+  });
+}
+
+// ─── SAVE / DUPLICATE / DELETE ────────────────────────────────────────────────
+function saveCurrentRecipe() {
+  const r = currentRecipe();
+  if (!r) return;
+  saveRecipes();
+  renderSidebar();
+  showToast(`✓ Saved: ${r.name || 'Untitled'}`);
+}
+
+function duplicateRecipe(id) {
+  const r = recipes.find(r => r.id === id);
+  if (!r) return;
+  const copy = JSON.parse(JSON.stringify(r));
+  copy.id = crypto.randomUUID();
+  copy.name = (r.name || 'Untitled') + ' (copy)';
+  copy.createdAt = Date.now();
+  recipes.unshift(copy);
+  saveRecipes();
+  currentRecipeId = copy.id;
+  renderSidebar();
+  renderBuilder(copy);
+  showToast('Recipe duplicated');
+}
+
+let deletingId = null;
+function openDeleteModal(id) {
+  deletingId = id;
+  const r = recipes.find(r => r.id === id);
+  document.getElementById('delete-recipe-name').textContent = r?.name || 'this recipe';
+  document.getElementById('delete-modal').classList.add('open');
+}
+
+function confirmDeleteRecipe() {
+  recipes = recipes.filter(r => r.id !== deletingId);
+  saveRecipes();
+  currentRecipeId = null;
+  closeModal('delete-modal');
+  renderSidebar();
+  updateSubtitle();
+  document.getElementById('builder-area').innerHTML = `
+    <div class="builder-empty">
+      <div class="builder-empty-icon"><i class="ti ti-flask"></i></div>
+      <div class="builder-empty-title">No recipe selected</div>
+      <div style="font-size:13px;margin-bottom:1.5rem;">Create a new recipe or select one from the list.</div>
+      <button class="btn btn-primary" onclick="newRecipe()"><i class="ti ti-plus"></i> New recipe</button>
+    </div>`;
+  showToast('Recipe deleted');
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function currentRecipe() { return recipes.find(r => r.id === currentRecipeId) || null; }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ─── BAR PREP BUILDER ────────────────────────────────────────────────────────
+function renderBarPrepBuilder(r) {
+  document.getElementById('builder-area').innerHTML = `
+  <div class="builder">
+
+    <!-- TYPE TOGGLE -->
+    <div class="card">
+      <div class="card-title">Recipe type</div>
+      <div style="display:flex;gap:6px;margin-bottom:0;">
+        <div class="pill" onclick="setRecipeType('cocktail')" style="font-size:11px;padding:4px 12px;">
+          <i class="ti ti-glass" style="font-size:11px;"></i> Cocktail
+        </div>
+        <div class="pill active" style="font-size:11px;padding:4px 12px;">
+          <i class="ti ti-tool" style="font-size:11px;"></i> Bar Prep
+        </div>
+      </div>
+    </div>
+
+    <!-- META -->
+    <div class="card">
+      <div class="card-title">Prep item info</div>
+      <div class="form-grid-2" style="margin-bottom:10px;">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-input" placeholder="e.g. Chamomile Whiskey Blend"
+            value="${esc(r.name)}" oninput="updateField('name',this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Yield</label>
+          <input type="text" class="form-input" placeholder="e.g. 1 quart, 1 bottle, 1 cambro"
+            value="${esc(r.bpYield||'')}" oninput="updateField('bpYield',this.value)">
+        </div>
+      </div>
+    </div>
+
+    <!-- INGREDIENTS -->
+    <div class="card">
+      <div class="card-title">Ingredients</div>
+      <div id="bp-ing-rows" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">
+        ${renderBPIngRows(r)}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="addBPIngRow()">
+        <i class="ti ti-plus"></i> Add ingredient
+      </button>
+    </div>
+
+    <!-- STEPS -->
+    <div class="card">
+      <div class="card-title">Method / Steps</div>
+      <div id="bp-steps" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+        ${renderBPSteps(r)}
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="addBPStep()">
+        <i class="ti ti-plus"></i> Add step
+      </button>
+    </div>
+
+    <!-- NOTES -->
+    <div class="card">
+      <div class="card-title">Notes</div>
+      <textarea class="form-textarea" style="min-height:80px;"
+        placeholder="Test notes, variations, timing, temp..."
+        oninput="updateField('summary',this.value)">${esc(r.summary||'')}</textarea>
+    </div>
+
+    <!-- SAVE BAR -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:1rem;border-top:1px solid var(--border);">
+      <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${r.id}')"><i class="ti ti-trash"></i> Delete</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="duplicateRecipe('${r.id}')"><i class="ti ti-copy"></i> Duplicate</button>
+        <button class="btn btn-primary" onclick="saveCurrentRecipe()"><i class="ti ti-device-floppy"></i> Save</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderBPIngRows(r) {
+  const ings = r.bpIngredients || [];
+  if (ings.length === 0) return '';
+  return ings.map((ing, i) => `
+    <div style="display:grid;grid-template-columns:80px 80px 1fr 28px;gap:6px;align-items:center;">
+      <input type="text" class="form-input" style="height:30px;font-size:12px;font-family:var(--mono);text-align:center;"
+        placeholder="Qty" value="${esc(ing.qty||'')}"
+        oninput="updateBPIng(${i},'qty',this.value)">
+      <input type="text" class="form-input" style="height:30px;font-size:12px;"
+        placeholder="Unit" value="${esc(ing.unit||'')}"
+        oninput="updateBPIng(${i},'unit',this.value)">
+      <input type="text" class="form-input" style="height:30px;font-size:13px;"
+        placeholder="Ingredient" value="${esc(ing.name||'')}"
+        oninput="updateBPIng(${i},'name',this.value)">
+      <div class="icon-btn danger" onclick="removeBPIng(${i})"><i class="ti ti-trash" style="font-size:12px;"></i></div>
+    </div>`).join('');
+}
+
+function renderBPSteps(r) {
+  const steps = r.bpSteps || [];
+  if (steps.length === 0) return '';
+  return steps.map((step, i) => `
+    <div style="display:grid;grid-template-columns:24px 1fr 28px;gap:8px;align-items:start;">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--ink-ghost);padding-top:8px;text-align:right;">${i+1}</div>
+      <input type="text" class="form-input" style="height:34px;font-size:13px;"
+        placeholder="e.g. Combine in cambro, steep overnight, strain"
+        value="${esc(step||'')}"
+        oninput="updateBPStep(${i},this.value)"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();addBPStep();}">
+      <div class="icon-btn danger" onclick="removeBPStep(${i})"><i class="ti ti-trash" style="font-size:12px;"></i></div>
+    </div>`).join('');
+}
+
+function addBPIngRow() {
+  const r = currentRecipe();
+  if (!r) return;
+  if (!r.bpIngredients) r.bpIngredients = [];
+  r.bpIngredients.push({ qty: '', unit: '', name: '' });
+  saveRecipes();
+  document.getElementById('bp-ing-rows').innerHTML = renderBPIngRows(r);
+}
+
+function removeBPIng(i) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.bpIngredients.splice(i, 1);
+  saveRecipes();
+  document.getElementById('bp-ing-rows').innerHTML = renderBPIngRows(r);
+}
+
+function updateBPIng(i, field, val) {
+  const r = currentRecipe();
+  if (!r || !r.bpIngredients) return;
+  r.bpIngredients[i][field] = val;
+  saveRecipes();
+}
+
+function addBPStep() {
+  const r = currentRecipe();
+  if (!r) return;
+  if (!r.bpSteps) r.bpSteps = [];
+  r.bpSteps.push('');
+  saveRecipes();
+  document.getElementById('bp-steps').innerHTML = renderBPSteps(r);
+  // Focus last input
+  const inputs = document.getElementById('bp-steps').querySelectorAll('input');
+  if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+function removeBPStep(i) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.bpSteps.splice(i, 1);
+  saveRecipes();
+  document.getElementById('bp-steps').innerHTML = renderBPSteps(r);
+}
+
+function updateBPStep(i, val) {
+  const r = currentRecipe();
+  if (!r || !r.bpSteps) return;
+  r.bpSteps[i] = val;
+  saveRecipes();
+}
+
+
+function seedBarPrepRecipes() {
+  const existing = localStorage.getItem('hg_recipes');
+  const existingRecipes = existing ? JSON.parse(existing) : [];
+  // Only seed if no bar prep recipes exist yet
+  if (existingRecipes.some(r => r.recipeType === 'barprep')) return;
+  const items = [
+  {
+    "name": "Simple Syrup",
+    "bpYield": "1 quart",
+    "bpIngredients": [
+      {
+        "qty": "2:1",
+        "unit": "",
+        "name": "Sugar to Water"
+      }
+    ],
+    "bpSteps": [
+      "Bring to a simmer"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Honey Syrup",
+    "bpYield": "1 quart",
+    "bpIngredients": [
+      {
+        "qty": "2:1",
+        "unit": "",
+        "name": "Honey to Water"
+      }
+    ],
+    "bpSteps": [
+      "No need to boil — use hot water from espresso machine"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Ginger Syrup",
+    "bpYield": "1 quart",
+    "bpIngredients": [
+      {
+        "qty": "2:1",
+        "unit": "",
+        "name": "Sugar to Ginger Juice"
+      }
+    ],
+    "bpSteps": [
+      "Bring to a simmer"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Cinnamon Syrup",
+    "bpYield": "1 quart",
+    "bpIngredients": [
+      {
+        "qty": "10",
+        "unit": "g",
+        "name": "Crushed Cinnamon"
+      },
+      {
+        "qty": "1",
+        "unit": "g",
+        "name": "Kosher Salt"
+      },
+      {
+        "qty": "1",
+        "unit": "qt",
+        "name": "Simple Syrup"
+      }
+    ],
+    "bpSteps": [
+      "Sous vide at 140°F for 2 hours"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Vanilla Simple Syrup",
+    "bpYield": "1 quart",
+    "bpIngredients": [
+      {
+        "qty": "3",
+        "unit": "",
+        "name": "Vanilla Beans, scraped"
+      },
+      {
+        "qty": "1",
+        "unit": "qt",
+        "name": "Simple Syrup"
+      }
+    ],
+    "bpSteps": [
+      "Sous vide at 140°F for 1 hour+"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Saline Solution",
+    "bpYield": "",
+    "bpIngredients": [
+      {
+        "qty": "20",
+        "unit": "g",
+        "name": "Kosher Salt"
+      },
+      {
+        "qty": "80",
+        "unit": "g",
+        "name": "Water"
+      }
+    ],
+    "bpSteps": [
+      "Shake until dissolved"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Citric Acid Solution",
+    "bpYield": "",
+    "bpIngredients": [
+      {
+        "qty": "50",
+        "unit": "g",
+        "name": "Citric Acid"
+      },
+      {
+        "qty": "200",
+        "unit": "g",
+        "name": "Water"
+      }
+    ],
+    "bpSteps": [
+      "Shake in deli container until dissolved"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Olive Brine",
+    "bpYield": "",
+    "bpIngredients": [
+      {
+        "qty": "561",
+        "unit": "g",
+        "name": "Hot Water"
+      },
+      {
+        "qty": "31.2",
+        "unit": "g",
+        "name": "Kosher Salt"
+      },
+      {
+        "qty": "7.8",
+        "unit": "g",
+        "name": "Lactic Acid"
+      }
+    ],
+    "bpSteps": [
+      "Combine and stir until dissolved"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Foam",
+    "bpYield": "1 batch",
+    "bpIngredients": [
+      {
+        "qty": "10",
+        "unit": "oz",
+        "name": "Orange Juice"
+      },
+      {
+        "qty": "12",
+        "unit": "oz",
+        "name": "Egg White"
+      },
+      {
+        "qty": "6",
+        "unit": "oz",
+        "name": "Giffard Pamplemousse"
+      }
+    ],
+    "bpSteps": [
+      "Combine and charge in whipper"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Passion Fruit Tea",
+    "bpYield": "1 quart",
+    "bpIngredients": [
+      {
+        "qty": "182",
+        "unit": "g",
+        "name": "Passion Fruit Jelly"
+      }
+    ],
+    "bpSteps": [
+      "Fill quart container halfway with hot water",
+      "Mix until dissolved",
+      "Top with cold water"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Tarragon Syrup",
+    "bpYield": "64 oz",
+    "bpIngredients": [
+      {
+        "qty": "64",
+        "unit": "oz",
+        "name": "Simple Syrup"
+      },
+      {
+        "qty": "51",
+        "unit": "g",
+        "name": "Tarragon"
+      }
+    ],
+    "bpSteps": [
+      "Combine in sous vide bag",
+      "Sous vide at 140°F for 1 hour",
+      "Blend and strain"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Coconut Matcha Syrup",
+    "bpYield": "1 batch",
+    "bpIngredients": [
+      {
+        "qty": "388",
+        "unit": "g",
+        "name": "Coconut Milk"
+      },
+      {
+        "qty": "388",
+        "unit": "g",
+        "name": "Sugar"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "name": "Citric Acid Solution"
+      },
+      {
+        "qty": "7",
+        "unit": "g",
+        "name": "Matcha"
+      }
+    ],
+    "bpSteps": [
+      "Blend coconut milk and sugar",
+      "Add citric acid solution",
+      "Add matcha and blend until smooth"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Chamomile Whiskey Blend",
+    "bpYield": "1 cambro",
+    "bpIngredients": [
+      {
+        "qty": "1",
+        "unit": "bottle",
+        "name": "Bank Note Whiskey"
+      },
+      {
+        "qty": "1",
+        "unit": "bottle",
+        "name": "Old Grand-Dad"
+      },
+      {
+        "qty": "15",
+        "unit": "g",
+        "name": "Chamomile Tea"
+      }
+    ],
+    "bpSteps": [
+      "Combine in cambro",
+      "Steep overnight",
+      "Strain"
+    ],
+    "summary": "Test with 23g chamomile sous vide as alternative"
+  },
+  {
+    "name": "Raisin Gin",
+    "bpYield": "1 bottle",
+    "bpIngredients": [
+      {
+        "qty": "1",
+        "unit": "bottle",
+        "name": "Breckenridge Gin"
+      },
+      {
+        "qty": "½",
+        "unit": "lb",
+        "name": "Butter"
+      },
+      {
+        "qty": "4",
+        "unit": "tbsp",
+        "name": "Rehydrated Golden Raisins"
+      }
+    ],
+    "bpSteps": [
+      "Melt butter",
+      "Blend butter + raisins (Robo Coup)",
+      "Combine with gin",
+      "Freeze, then strain"
+    ],
+    "summary": "Test with sous vide raisins in gin and add a tiny amount of amontillado to the batch drink"
+  },
+  {
+    "name": "Tarragon Seedlip",
+    "bpYield": "2 bottles",
+    "bpIngredients": [
+      {
+        "qty": "51",
+        "unit": "g",
+        "name": "Tarragon"
+      },
+      {
+        "qty": "2",
+        "unit": "bottles",
+        "name": "Seedlip Grove"
+      }
+    ],
+    "bpSteps": [
+      "Combine in sous vide bag",
+      "Sous vide at 140°F for 1 hour"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Passion Fruit ROF Batch",
+    "bpYield": "1 batch",
+    "bpIngredients": [
+      {
+        "qty": "92",
+        "unit": "g",
+        "name": "Passion Fruit Jelly"
+      },
+      {
+        "qty": "53",
+        "unit": "g",
+        "name": "Hot Water"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "name": "Passion Fruit Giffard"
+      },
+      {
+        "qty": "1",
+        "unit": "bottle",
+        "name": "Redemption Rye"
+      }
+    ],
+    "bpSteps": [
+      "Mix jelly with hot water until dissolved",
+      "Batch everything in a container",
+      "Pour when needed"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Old Fashioned Batch",
+    "bpYield": "1 batch",
+    "bpIngredients": [
+      {
+        "qty": "45",
+        "unit": "oz",
+        "name": "Rittenhouse Rye"
+      },
+      {
+        "qty": "5",
+        "unit": "oz",
+        "name": "Turbinado Sugar"
+      },
+      {
+        "qty": "12",
+        "unit": "oz",
+        "name": "Water"
+      }
+    ],
+    "bpSteps": [
+      "Combine and stir until sugar dissolved"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Raisin Negroni Batch",
+    "bpYield": "1 batch",
+    "bpIngredients": [
+      {
+        "qty": "16.5",
+        "unit": "oz",
+        "name": "Raisin Gin"
+      },
+      {
+        "qty": "12.25",
+        "unit": "oz",
+        "name": "Luxardo Bitter Bianco"
+      },
+      {
+        "qty": "14",
+        "unit": "oz",
+        "name": "Dolin Dry Vermouth"
+      },
+      {
+        "qty": "2.5",
+        "unit": "oz",
+        "name": "Carpano Bianco"
+      },
+      {
+        "qty": "12",
+        "unit": "oz",
+        "name": "Water"
+      }
+    ],
+    "bpSteps": [
+      "Combine all ingredients and stir"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Sous Vide Fennel Martini Batch",
+    "bpYield": "1 batch",
+    "bpIngredients": [
+      {
+        "qty": "21",
+        "unit": "oz",
+        "name": "Supergay Fennel Infused Vodka"
+      },
+      {
+        "qty": "4.25",
+        "unit": "oz",
+        "name": "Cocchi Americano"
+      },
+      {
+        "qty": "6",
+        "unit": "oz",
+        "name": "Water"
+      }
+    ],
+    "bpSteps": [
+      "Infuse vodka with fennel sous vide",
+      "Combine all ingredients",
+      "Chill before service"
+    ],
+    "summary": "Serve 4.5 oz in martini glass"
+  },
+  {
+    "name": "Freezer Vesper Batch",
+    "bpYield": "1 batch",
+    "bpIngredients": [
+      {
+        "qty": "16",
+        "unit": "oz",
+        "name": "Supergay Vodka"
+      },
+      {
+        "qty": "4",
+        "unit": "oz",
+        "name": "Cocchi Americano"
+      },
+      {
+        "qty": "4",
+        "unit": "oz",
+        "name": "Tanqueray Gin"
+      },
+      {
+        "qty": "10",
+        "unit": "oz",
+        "name": "Water"
+      },
+      {
+        "qty": "10",
+        "unit": "dashes",
+        "name": "Lemon Bitters"
+      }
+    ],
+    "bpSteps": [
+      "Combine all ingredients",
+      "Store in freezer"
+    ],
+    "summary": "Serve 4.5 oz in martini glass"
+  },
+  {
+    "name": "Paper Plane Batch",
+    "bpYield": "2 quarts",
+    "bpIngredients": [
+      {
+        "qty": "19.2",
+        "unit": "oz",
+        "name": "Rittenhouse Rye"
+      },
+      {
+        "qty": "19.2",
+        "unit": "oz",
+        "name": "Meletti 1870 Amaro"
+      },
+      {
+        "qty": "23",
+        "unit": "oz",
+        "name": "Yuzu Curaçao"
+      },
+      {
+        "qty": "7.5",
+        "unit": "oz",
+        "name": "Mango Giffard"
+      },
+      {
+        "qty": "2",
+        "unit": "oz",
+        "name": "Citric Acid Solution"
+      },
+      {
+        "qty": "2",
+        "unit": "oz",
+        "name": "Simple Syrup"
+      }
+    ],
+    "bpSteps": [
+      "Combine all ingredients",
+      "Per quart for service: 8 oz batch + 17 oz water"
+    ],
+    "summary": ""
+  },
+  {
+    "name": "Melon Milk Punch",
+    "bpYield": "1 large batch",
+    "bpIngredients": [
+      {
+        "qty": "1.5",
+        "unit": "bottles",
+        "name": "Condesa Gin"
+      },
+      {
+        "qty": "20",
+        "unit": "oz",
+        "name": "Artonic Melon Liqueur"
+      },
+      {
+        "qty": "26",
+        "unit": "oz",
+        "name": "Lemon Juice"
+      },
+      {
+        "qty": "6.5",
+        "unit": "oz",
+        "name": "Vanilla Giffard"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "name": "Pineapple Giffard"
+      },
+      {
+        "qty": "4",
+        "unit": "oz",
+        "name": "Melon Powder"
+      },
+      {
+        "qty": "10",
+        "unit": "oz",
+        "name": "Pineapple Juice"
+      },
+      {
+        "qty": "2",
+        "unit": "oz",
+        "name": "Coconut Mahina"
+      },
+      {
+        "qty": "32",
+        "unit": "oz",
+        "name": "Vanilla Tea"
+      },
+      {
+        "qty": "5",
+        "unit": "oz",
+        "name": "Simple Syrup"
+      },
+      {
+        "qty": "32",
+        "unit": "oz",
+        "name": "Whole Milk"
+      }
+    ],
+    "bpSteps": [
+      "Combine all ingredients except milk",
+      "Add mixture to 32 oz milk",
+      "Let sit 4–6 hours",
+      "Strain through cheesecloth"
+    ],
+    "summary": "Serve 3.5 oz in milk punch glass"
+  }
+];
+  const seeded = items.map(item => ({
+    id: crypto.randomUUID(),
+    name: item.name,
+    recipeType: 'barprep',
+    bpYield: item.bpYield || '',
+    bpIngredients: item.bpIngredients || [],
+    bpSteps: item.bpSteps || [],
+    summary: item.summary || '',
+    ingredients: [],
+    createdAt: Date.now(),
+    source: 'seed'
+  }));
+  const merged = [...existingRecipes, ...seeded];
+  localStorage.setItem('hg_recipes', JSON.stringify(merged));
+}
+
+
+function seedCocktailRecipes() {
+  const existing = localStorage.getItem('hg_recipes');
+  const existingRecipes = existing ? JSON.parse(existing) : [];
+  if (existingRecipes.some(r => r.recipeType !== 'barprep' && r.source === 'seed')) return;
+  const items = [
+  {
+    "name": "Gate Change",
+    "bartender": "",
+    "style": "Carbonated",
+    "glass": "Collins",
+    "ice": "Collins Cube",
+    "garnish": "Candied Mango across top of glass",
+    "family": "Carbonated Cocktails",
+    "flavor": [
+      "Citrusy",
+      "Tropical"
+    ],
+    "summary": "Rye, Meletti, Yuzu Curaçao, lemon, mango — force carbonated",
+    "ingredients": [
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Rye Whiskey"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Meletti 1870 Amaro"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Yuzu Curaçao"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.25",
+        "unit": "oz",
+        "ingredientName": "Mango Giffard"
+      }
+    ],
+    "menuPrice": 16,
+    "batchQty": 1,
+    "notes": "Omit lemon if force carbonated"
+  },
+  {
+    "name": "Melon Milk Punch",
+    "bartender": "",
+    "style": "Built",
+    "glass": "Mug",
+    "ice": "No Ice",
+    "garnish": "Brûléed Marshmallow",
+    "family": "Clarified Cocktails",
+    "flavor": [
+      "Sweet",
+      "Tropical"
+    ],
+    "summary": "Milk punch base — 3.5 oz build",
+    "ingredients": [
+      {
+        "qty": "3.5",
+        "unit": "oz",
+        "ingredientName": "Melon Milk Punch Batch"
+      }
+    ],
+    "menuPrice": 16,
+    "batchQty": 1
+  },
+  {
+    "name": "Passion Fruit ROF",
+    "bartender": "",
+    "style": "Built",
+    "glass": "Dbl Rocks",
+    "ice": "Big Cube",
+    "garnish": "Dehydrated OJ slice and cherry on a pick",
+    "family": "Old Fashioned Family",
+    "flavor": [
+      "Tropical",
+      "Boozy"
+    ],
+    "summary": "Passion fruit ROF batch, angostura, light stir",
+    "ingredients": [
+      {
+        "qty": "2",
+        "unit": "oz",
+        "ingredientName": "Passion Fruit ROF Batch"
+      },
+      {
+        "qty": "3",
+        "unit": "dash",
+        "ingredientName": "Angostura Bitters"
+      }
+    ],
+    "menuPrice": 16,
+    "batchQty": 1
+  },
+  {
+    "name": "The Upside Down",
+    "bartender": "",
+    "style": "Stirred",
+    "glass": "Coupe",
+    "ice": "No Ice",
+    "garnish": "Lemon and orange twisted together on skewer",
+    "family": "Martini Family",
+    "flavor": [
+      "Citrusy",
+      "Bitter"
+    ],
+    "summary": "Dolin Rouge, Fidencio Mezcal, Yuzu Curaçao — light stir",
+    "ingredients": [
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Dolin Rouge Vermouth"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Fidencio Mezcal"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Yuzu Curaçao"
+      }
+    ],
+    "menuPrice": 17,
+    "batchQty": 1
+  },
+  {
+    "name": "Early Season",
+    "bartender": "",
+    "style": "Shaken",
+    "glass": "Jet Pilot",
+    "ice": "Crushed",
+    "garnish": "Dehydrated tarragon",
+    "family": "Classic Sour",
+    "flavor": [
+      "Herbal",
+      "Citrusy"
+    ],
+    "summary": "Light shake — S&S, rocks, crushed ice jet pilot",
+    "ingredients": [
+      {
+        "qty": "1",
+        "unit": "whole",
+        "ingredientName": "Tarragon sprig (muddle)"
+      },
+      {
+        "qty": "1",
+        "unit": "whole",
+        "ingredientName": "Mint sprig (muddle)"
+      },
+      {
+        "qty": "1.5",
+        "unit": "oz",
+        "ingredientName": "Vodka"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Tarragon Simple Syrup"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Rothman Orchard Pear Liqueur"
+      }
+    ],
+    "menuPrice": 16,
+    "batchQty": 1
+  },
+  {
+    "name": "Loud One",
+    "bartender": "",
+    "style": "Shaken",
+    "glass": "Coupe",
+    "ice": "No Ice",
+    "garnish": "",
+    "family": "Classic Sour",
+    "flavor": [
+      "Tropical",
+      "Herbal"
+    ],
+    "summary": "La Gritona, matcha coconut SS, Genziello, lemon, coconut mahina",
+    "ingredients": [
+      {
+        "qty": "1.5",
+        "unit": "oz",
+        "ingredientName": "La Gritona Reposado Tequila"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Coconut Matcha Syrup"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Genziello Amaro"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Coconut Mahina"
+      }
+    ],
+    "menuPrice": 16,
+    "batchQty": 1
+  },
+  {
+    "name": "Golden Negroni",
+    "bartender": "",
+    "style": "Stirred",
+    "glass": "Fancy Rocks",
+    "ice": "Big Cube",
+    "garnish": "Freezer lemon twist",
+    "family": "Negroni Family",
+    "flavor": [
+      "Bitter",
+      "Herbal",
+      "Boozy"
+    ],
+    "summary": "Pour 3 oz over large cube, no stir. Batched.",
+    "ingredients": [
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Raisin Gin"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Dolin Dry Vermouth"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Luxardo Bitter Bianco"
+      },
+      {
+        "qty": "0.25",
+        "unit": "oz",
+        "ingredientName": "Carpano Bianco"
+      }
+    ],
+    "menuPrice": 17,
+    "batchQty": 1
+  },
+  {
+    "name": "Gin Gin Fizz",
+    "bartender": "",
+    "style": "Shaken",
+    "glass": "Dbl Rocks",
+    "ice": "Rocks",
+    "garnish": "Foam, dehydrated lemon wheel",
+    "family": "Fizz",
+    "flavor": [
+      "Citrusy",
+      "Herbal"
+    ],
+    "summary": "New Amsterdam Gin, lemon, ginger syrup, Pamplemousse — shake, foam top",
+    "ingredients": [
+      {
+        "qty": "1.5",
+        "unit": "oz",
+        "ingredientName": "New Amsterdam Gin"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Ginger Syrup"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Giffard Pamplemousse"
+      }
+    ],
+    "menuPrice": 15,
+    "batchQty": 1
+  },
+  {
+    "name": "Downshift",
+    "bartender": "",
+    "style": "Shaken",
+    "glass": "Coupe",
+    "ice": "No Ice",
+    "garnish": "Edible flower",
+    "family": "Classic Sour",
+    "flavor": [
+      "Herbal",
+      "Sweet",
+      "Citrusy"
+    ],
+    "summary": "Chamomile whiskey blend, lemon, honey SS, Turbo, almond oil",
+    "ingredients": [
+      {
+        "qty": "2",
+        "unit": "oz",
+        "ingredientName": "Chamomile Whiskey Blend"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Honey Syrup"
+      },
+      {
+        "qty": "0.25",
+        "unit": "oz",
+        "ingredientName": "Turbo (Génépy)"
+      },
+      {
+        "qty": "5",
+        "unit": "dash",
+        "ingredientName": "Almond Oil"
+      }
+    ],
+    "menuPrice": 16,
+    "batchQty": 1
+  },
+  {
+    "name": "Split Decision",
+    "bartender": "",
+    "style": "Stirred",
+    "glass": "Square Side Coupe",
+    "ice": "No Ice",
+    "garnish": "Orange twist",
+    "family": "Manhattan Family",
+    "flavor": [
+      "Bitter",
+      "Boozy"
+    ],
+    "summary": "El Dorado 12, Old Grand-Dad, Faccia Brutto Carciofo, Torino, Caribbean Bitters",
+    "ingredients": [
+      {
+        "qty": "1.5",
+        "unit": "oz",
+        "ingredientName": "El Dorado 12yr Rum"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Old Grand-Dad Bourbon"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Faccia Brutto Carciofo"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Torino Vermouth"
+      },
+      {
+        "qty": "20",
+        "unit": "dash",
+        "ingredientName": "Caribbean Bitters"
+      }
+    ],
+    "menuPrice": 18,
+    "batchQty": 1
+  },
+  {
+    "name": "Whiskey & Maize",
+    "bartender": "",
+    "style": "Stirred",
+    "glass": "Coupe",
+    "ice": "No Ice",
+    "garnish": "Orange twist",
+    "family": "Manhattan Family",
+    "flavor": [
+      "Boozy",
+      "Sweet"
+    ],
+    "summary": "Iwai Whisky, Nixta, Yellow Chartreuse, cinnamon SS, mole bitters",
+    "ingredients": [
+      {
+        "qty": "2",
+        "unit": "oz",
+        "ingredientName": "Iwai Whisky"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Nixta Corn Liqueur"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Yellow Chartreuse"
+      },
+      {
+        "qty": "0.25",
+        "unit": "oz",
+        "ingredientName": "Cinnamon Syrup"
+      },
+      {
+        "qty": "2",
+        "unit": "dash",
+        "ingredientName": "Mole Bitters"
+      }
+    ],
+    "menuPrice": 17,
+    "batchQty": 1
+  },
+  {
+    "name": "Sunlit",
+    "bartender": "",
+    "style": "Shaken",
+    "glass": "Fancy Beer",
+    "ice": "Rocks",
+    "garnish": "Popping boba on dehydrated grapefruit half moon",
+    "family": "Zero-Proof Cocktails",
+    "flavor": [
+      "Tropical",
+      "Citrusy"
+    ],
+    "summary": "Pineapple Giffard NA, lemon, Aperitif, passion fruit tea top",
+    "ingredients": [
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Pineapple Giffard NA"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Giffard Aperitif NA"
+      },
+      {
+        "qty": "4",
+        "unit": "oz",
+        "ingredientName": "Passion Fruit Tea"
+      }
+    ],
+    "menuPrice": 12,
+    "batchQty": 1
+  },
+  {
+    "name": "Herb & Pine",
+    "bartender": "",
+    "style": "Shaken",
+    "glass": "Coupe",
+    "ice": "No Ice",
+    "garnish": "Clipped dried tarragon",
+    "family": "Zero-Proof Cocktails",
+    "flavor": [
+      "Herbal",
+      "Citrusy",
+      "Tropical"
+    ],
+    "summary": "Tarragon Seedlip, lemon, tarragon SS, pineapple",
+    "ingredients": [
+      {
+        "qty": "1.5",
+        "unit": "oz",
+        "ingredientName": "Tarragon Seedlip"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Tarragon Simple Syrup"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Pineapple Juice"
+      }
+    ],
+    "menuPrice": 12,
+    "batchQty": 1
+  },
+  {
+    "name": "Melon Tide",
+    "bartender": "",
+    "style": "Frozen",
+    "glass": "Jet Pilot",
+    "ice": "Crushed",
+    "garnish": "Dragonfruit powder and edible flower",
+    "family": "Frozen Cocktails",
+    "flavor": [
+      "Tropical",
+      "Sweet"
+    ],
+    "summary": "Melon powder, lemon, pineapple, SS, coconut water — blended",
+    "ingredients": [
+      {
+        "qty": "2",
+        "unit": "barspoon",
+        "ingredientName": "Melon Powder"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Pineapple Juice"
+      },
+      {
+        "qty": "0.25",
+        "unit": "oz",
+        "ingredientName": "Simple Syrup"
+      },
+      {
+        "qty": "4",
+        "unit": "oz",
+        "ingredientName": "Coconut Water"
+      }
+    ],
+    "menuPrice": 12,
+    "batchQty": 1
+  },
+  {
+    "name": "Shandy",
+    "bartender": "",
+    "style": "Built",
+    "glass": "Fancy Beer",
+    "ice": "Rocks",
+    "garnish": "Grapefruit twist across the glass",
+    "family": "Zero-Proof Cocktails",
+    "flavor": [
+      "Citrusy",
+      "Tropical"
+    ],
+    "summary": "Pour over cubes, add half NA beer in fancy beer glass",
+    "ingredients": [
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Giffard Aperitif NA"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Pineapple Juice"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Lemon Juice"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Simple Syrup"
+      }
+    ],
+    "menuPrice": 12,
+    "batchQty": 1
+  },
+  {
+    "name": "Phony Negroni",
+    "bartender": "",
+    "style": "Built",
+    "glass": "Dbl Rocks",
+    "ice": "Big Cube",
+    "garnish": "Rosemary sprig, orange wheel",
+    "family": "Zero-Proof Cocktails",
+    "flavor": [
+      "Bitter",
+      "Herbal"
+    ],
+    "summary": "NA Negroni — pour 2/3rds over big rock",
+    "ingredients": [
+      {
+        "qty": "2",
+        "unit": "oz",
+        "ingredientName": "NA Negroni Batch"
+      }
+    ],
+    "menuPrice": 12,
+    "batchQty": 1
+  },
+  {
+    "name": "Dirty Vodka Martini",
+    "bartender": "",
+    "style": "Stirred",
+    "glass": "Martini",
+    "ice": "No Ice",
+    "garnish": "Copita with olives",
+    "family": "Martini Family",
+    "flavor": [
+      "Savory",
+      "Boozy"
+    ],
+    "summary": "Scant 1.5 oz olive brine",
+    "ingredients": [
+      {
+        "qty": "2.5",
+        "unit": "oz",
+        "ingredientName": "Ketel One Vodka"
+      },
+      {
+        "qty": "1.5",
+        "unit": "oz",
+        "ingredientName": "Olive Brine"
+      },
+      {
+        "qty": "0.5",
+        "unit": "oz",
+        "ingredientName": "Dolin Dry Vermouth"
+      },
+      {
+        "qty": "3",
+        "unit": "dash",
+        "ingredientName": "Olive Bitters"
+      }
+    ],
+    "menuPrice": 18,
+    "batchQty": 1
+  },
+  {
+    "name": "Classic Martini",
+    "bartender": "",
+    "style": "Stirred",
+    "glass": "Martini",
+    "ice": "No Ice",
+    "garnish": "Lemon twist",
+    "family": "Martini Family",
+    "flavor": [
+      "Boozy",
+      "Herbal"
+    ],
+    "summary": "Hepple Gin, Carpano Dry vermouth",
+    "ingredients": [
+      {
+        "qty": "2.5",
+        "unit": "oz",
+        "ingredientName": "Hepple Gin"
+      },
+      {
+        "qty": "0.75",
+        "unit": "oz",
+        "ingredientName": "Carpano Dry Vermouth"
+      }
+    ],
+    "menuPrice": 18,
+    "batchQty": 1
+  },
+  {
+    "name": "Fennel Martini",
+    "bartender": "",
+    "style": "Stirred",
+    "glass": "Martini",
+    "ice": "No Ice",
+    "garnish": "Pickled fennel & olives",
+    "family": "Martini Family",
+    "flavor": [
+      "Herbal",
+      "Boozy"
+    ],
+    "summary": "Batched fennel martini — 4.5 oz pour",
+    "ingredients": [
+      {
+        "qty": "4.5",
+        "unit": "oz",
+        "ingredientName": "Sous Vide Fennel Martini Batch"
+      }
+    ],
+    "menuPrice": 18,
+    "batchQty": 1
+  },
+  {
+    "name": "Espresso Martini",
+    "bartender": "",
+    "style": "Shaken",
+    "glass": "Martini",
+    "ice": "No Ice",
+    "garnish": "3 coffee beans",
+    "family": "Martini Family",
+    "flavor": [
+      "Sweet",
+      "Boozy"
+    ],
+    "summary": "Albany Vodka, Mr Black, cold brew, SS",
+    "ingredients": [
+      {
+        "qty": "1.5",
+        "unit": "oz",
+        "ingredientName": "Albany Distilling Vodka"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Mr Black Cold Brew Liqueur"
+      },
+      {
+        "qty": "1",
+        "unit": "oz",
+        "ingredientName": "Cold Brew"
+      },
+      {
+        "qty": "0.25",
+        "unit": "oz",
+        "ingredientName": "Simple Syrup"
+      }
+    ],
+    "menuPrice": 16,
+    "batchQty": 1
+  }
+];
+  const seeded = items.map(item => ({
+    id: crypto.randomUUID(),
+    name: item.name,
+    bartender: item.bartender || '',
+    recipeType: 'cocktail',
+    style: item.style || '',
+    glass: item.glass || 'Coupe',
+    ice: item.ice || '',
+    garnish: item.garnish || '',
+    family: item.family || '',
+    flavor: item.flavor || [],
+    summary: item.summary || '',
+    menuPrice: item.menuPrice || null,
+    batchQty: 1,
+    ingredients: (item.ingredients || []).map(ing => ({
+      id: crypto.randomUUID(),
+      qty: ing.qty,
+      unit: ing.unit,
+      ingredientId: null,
+      ingredientName: ing.ingredientName
+    })),
+    createdAt: Date.now(),
+    source: 'seed'
+  }));
+  const merged = [...existingRecipes, ...seeded];
+  localStorage.setItem('hg_recipes', JSON.stringify(merged));
+}
+
+</script>
+</body>
+</html>
