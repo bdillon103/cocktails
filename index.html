@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hamlet & Ghost — Ingredient Library</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1812;
+    --ink-mid: #4a4640;
+    --ink-light: #8a8680;
+    --ink-ghost: #c8c4bc;
+    --parchment: #f5f2ec;
+    --parchment-dark: #ede9e0;
+    --parchment-mid: #e8e4db;
+    --accent: #c8392b;
+    --accent-dim: #e8d5d2;
+    --gold: #b8860b;
+    --gold-dim: #f0e8d0;
+    --green: #2d6a4f;
+    --green-dim: #d8ecd4;
+    --border: rgba(26,24,18,0.12);
+    --border-mid: rgba(26,24,18,0.2);
+    --radius: 6px;
+    --radius-lg: 10px;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--parchment);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* NAV */
+  .nav {
+    background: var(--ink);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 52px;
+    border-bottom: 2px solid var(--accent);
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--parchment);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: 2rem;
+    white-space: nowrap;
+  }
+  .nav-brand span { color: var(--accent); }
+  .nav-links { display: flex; gap: 0; flex: 1; }
+  .nav-link {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--ink-ghost);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0 1rem;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .nav-link:hover { color: var(--parchment); }
+  .nav-link.active { color: var(--parchment); border-bottom-color: var(--accent); }
+
+  /* LAYOUT */
+  .page { max-width: 1280px; margin: 0 auto; padding: 2rem; }
+  .page-header { margin-bottom: 1.5rem; }
+  .page-title {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .page-sub { font-size: 13px; color: var(--ink-light); }
+
+  /* IMPORT BANNER */
+  .import-banner {
+    background: var(--ink);
+    color: var(--parchment);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    gap: 1rem;
+  }
+  .import-left { display: flex; align-items: center; gap: 12px; }
+  .import-icon {
+    width: 36px; height: 36px;
+    background: rgba(200,57,43,0.2);
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .import-title { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; margin-bottom: 3px; }
+  .import-meta { font-size: 12px; color: var(--ink-ghost); display: flex; gap: 12px; flex-wrap: wrap; }
+  .import-meta span { display: flex; align-items: center; gap: 4px; }
+  .import-right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .flag-badge {
+    display: flex; align-items: center; gap: 5px;
+    background: rgba(200,57,43,0.2);
+    color: #ff8c7a;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  /* BUTTONS */
+  .btn {
+    height: 34px;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius);
+    padding: 0 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: var(--parchment);
+    color: var(--ink);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--parchment-mid); border-color: var(--border-mid); }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--parchment);
+    border-color: var(--ink);
+  }
+  .btn-primary:hover { background: var(--ink-mid); border-color: var(--ink-mid); }
+  .btn-danger { border-color: var(--accent); color: var(--accent); }
+  .btn-danger:hover { background: var(--accent-dim); }
+  .btn-sm { height: 28px; font-size: 10px; padding: 0 10px; }
+
+  /* TOOLBAR */
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--ink-light);
+    font-size: 14px;
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    height: 34px;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius);
+    padding: 0 10px 0 32px;
+    font-family: var(--sans);
+    font-size: 13px;
+    background: white;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--ink-mid); }
+  .search-input::placeholder { color: var(--ink-ghost); }
+  select.filter-select {
+    height: 34px;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius);
+    padding: 0 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    background: white;
+    color: var(--ink);
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234a4640' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  .filter-unpriced {
+    height: 34px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 0 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: white;
+    color: var(--accent);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+  .filter-unpriced:hover, .filter-unpriced.active { background: var(--accent-dim); }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+    gap: 0;
+  }
+  .tab {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--ink-light);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+  .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--parchment-dark);
+    color: var(--ink-mid);
+    font-size: 10px;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    padding: 0 5px;
+    margin-left: 6px;
+  }
+
+  /* TABLE */
+  .table-wrap {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--parchment-dark); }
+  th {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  th:hover { color: var(--ink); }
+  th.sort-asc::after { content: ' ↑'; color: var(--ink); }
+  th.sort-desc::after { content: ' ↓'; color: var(--ink); }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    font-size: 13px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--parchment); }
+  .ing-name { font-weight: 500; font-size: 13px; }
+  .ing-brand { font-size: 12px; color: var(--ink-light); margin-top: 1px; }
+
+  /* BADGES */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .badge-bourbon { background: #f0e8d0; color: #7a5200; }
+  .badge-gin { background: #e0ede8; color: #1a4d35; }
+  .badge-rum { background: #fdecd8; color: #7a3300; }
+  .badge-scotch { background: #e8e4f0; color: #3a2860; }
+  .badge-tequila { background: #fef3d0; color: #7a5800; }
+  .badge-mezcal { background: #e8f0e0; color: #2d4a18; }
+  .badge-vodka { background: #e8eef4; color: #1a3050; }
+  .badge-rye { background: #f4e8dc; color: #5a2d0c; }
+  .badge-cordials { background: #f4e0f0; color: #5a1050; }
+  .badge-bitters { background: #f0ede0; color: #4a3d08; }
+  .badge-mixer { background: #e0f0f4; color: #0a3d50; }
+  .badge-other { background: var(--parchment-dark); color: var(--ink-mid); }
+
+  .no-price {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .cost-val {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .cost-per-oz {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--green);
+  }
+  .distributor { font-size: 12px; color: var(--ink-light); }
+
+  /* ROW ACTIONS */
+  .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .icon-btn {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-light);
+    cursor: pointer;
+    font-size: 13px;
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { color: var(--ink); border-color: var(--border-mid); background: var(--parchment); }
+  .icon-btn.danger:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+
+  /* PAGINATION */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--parchment-dark);
+  }
+  .page-info { font-family: var(--mono); font-size: 11px; color: var(--ink-light); }
+  .page-controls { display: flex; gap: 4px; align-items: center; }
+  .page-btn {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    background: white;
+    color: var(--ink);
+    transition: all 0.15s;
+  }
+  .page-btn:hover { background: var(--parchment-mid); }
+  .page-btn.active { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
+  .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(26,24,18,0.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: white;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-title { font-family: var(--mono); font-size: 14px; font-weight: 500; letter-spacing: 0.02em; }
+  .modal-body { padding: 1.5rem; }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--parchment-dark);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  }
+  .form-group { margin-bottom: 1rem; }
+  .form-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    margin-bottom: 6px;
+  }
+  .form-input, .form-select {
+    width: 100%;
+    height: 36px;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius);
+    padding: 0 12px;
+    font-family: var(--sans);
+    font-size: 13px;
+    background: white;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--ink-mid); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-hint { font-size: 11px; color: var(--ink-light); margin-top: 4px; }
+  .calc-preview {
+    background: var(--parchment);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--green);
+    margin-top: 8px;
+  }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    border: 1.5px dashed var(--border-mid);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .upload-zone:hover { border-color: var(--ink-mid); background: var(--parchment); }
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-title { font-family: var(--mono); font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .upload-sub { font-size: 12px; color: var(--ink-light); }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem; right: 1.5rem;
+    background: var(--ink);
+    color: var(--parchment);
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    border-left: 3px solid var(--accent);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 200;
+    pointer-events: none;
+    max-width: 320px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--ink-light);
+  }
+  .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-title { font-family: var(--mono); font-size: 14px; font-weight: 500; margin-bottom: 6px; color: var(--ink-mid); }
+  .empty-sub { font-size: 13px; }
+
+  /* IMPORT PROGRESS */
+  .import-progress {
+    display: none;
+    background: var(--parchment-dark);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .import-progress.show { display: block; }
+  .progress-bar-wrap { background: var(--parchment-mid); border-radius: 4px; height: 6px; margin: 8px 0; overflow: hidden; }
+  .progress-bar-fill { height: 6px; background: var(--green); border-radius: 4px; transition: width 0.3s; }
+
+  .section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">Hamlet <span>&</span> Ghost</div>
+  <div class="nav-links">
+    <a class="nav-link active" href="hamlet-ghost-ingredients.html">Ingredients</a>
+    <a class="nav-link " href="hamlet-ghost-recipes.html">Recipes</a>
+    <a class="nav-link " href="hamlet-ghost-grid.html">Menu Grid</a>
+    <a class="nav-link " href="hamlet-ghost-manager.html">Menu Manager</a>
+    <a class="nav-link " href="hamlet-ghost-dashboard.html">Dashboard</a>
+    <a class="nav-link " href="hamlet-ghost-specsheet.html">Spec Sheet</a>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+    <span id="nav-user" style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(200,196,188,0.6);letter-spacing:0.04em;"></span>
+    <button onclick="signOut()" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(200,196,188,0.7);padding:0 12px;height:28px;border-radius:4px;cursor:pointer;">Sign out</button>
+  </div>
+</div>
+</nav>
+
+<main class="page">
+  <div class="section-header-row">
+    <div class="page-header">
+      <div class="page-title">Ingredient Library</div>
+      <div class="page-sub" id="lib-sub">Loading...</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn" onclick="openImportModal()"><i class="ti ti-upload" style="font-size:13px;"></i> Import spreadsheet</button>
+      <button class="btn btn-primary" onclick="openAddModal()"><i class="ti ti-plus" style="font-size:13px;"></i> Add ingredient</button>
+    </div>
+  </div>
+
+  <!-- Import banner -->
+  <div class="import-banner" id="import-banner" style="display:none;">
+    <div class="import-left">
+      <div class="import-icon"><i class="ti ti-file-spreadsheet" style="font-size:18px;color:#ff8c7a;"></i></div>
+      <div>
+        <div class="import-title" id="banner-filename">—</div>
+        <div class="import-meta">
+          <span id="banner-count">—</span>
+          <span>·</span>
+          <span>Beer & wine excluded</span>
+          <span>·</span>
+          <span id="banner-date">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="import-right">
+      <div class="flag-badge" id="unpriced-badge" style="display:none;">
+        ⚠ <span id="unpriced-count">0</span> unpriced
+      </div>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,0.1); color:#c8c4bc; border-color:rgba(255,255,255,0.15);" onclick="openImportModal()">Re-import</button>
+    </div>
+  </div>
+
+  <!-- Import progress -->
+  <div class="import-progress" id="import-progress">
+    <div style="font-family:var(--mono); font-size:12px; font-weight:500;" id="progress-label">Parsing spreadsheet...</div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+    <div style="font-size:12px; color:var(--ink-light);" id="progress-sub">Filtering categories...</div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" id="tab-spirits" onclick="switchTab('spirits')">
+      Spirits & Mixers <span class="tab-count" id="count-spirits">0</span>
+    </div>
+    <div class="tab" id="tab-other" onclick="switchTab('other')">
+      Other Ingredients <span class="tab-count" id="count-other">0</span>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-wrap">
+      <span class="search-icon"><i class="ti ti-search" style="font-size:14px;"></i></span>
+      <input type="text" class="search-input" placeholder="Search ingredients..." id="search-input" oninput="filterTable()">
+    </div>
+    <select class="filter-select" id="filter-category" onchange="filterTable()">
+      <option value="">All categories</option>
+    </select>
+    <select class="filter-select" id="filter-sub" onchange="filterTable()">
+      <option value="">All subcategories</option>
+    </select>
+    <button class="filter-unpriced" id="btn-unpriced" onclick="toggleUnpriced()">⚠ Unpriced only</button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap" id="spirits-panel">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortTable('name')">Brand & Name</th>
+          <th onclick="sortTable('subcategory')">Subcategory</th>
+          <th onclick="sortTable('size')">Bottle Size</th>
+          <th onclick="sortTable('cost')">Bottle Cost</th>
+          <th onclick="sortTable('per_oz')">Cost / oz</th>
+          <th onclick="sortTable('distributor')">Distributor</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <tr>
+          <td colspan="7">
+            <div class="empty-state">
+              <div class="empty-icon"><i class="ti ti-package" style="font-size:32px;opacity:0.3;"></i></div>
+              <div class="empty-title">No ingredients yet</div>
+              <div class="empty-sub">Import a spreadsheet or add ingredients manually to get started.</div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="pagination" id="pagination" style="display:none;">
+      <div class="page-info" id="page-info">—</div>
+      <div class="page-controls" id="page-controls"></div>
+    </div>
+  </div>
+
+  <!-- Other ingredients panel -->
+  <div id="other-panel" style="display:none;">
+    <div class="section-header-row">
+      <div style="font-family:var(--mono); font-size:12px; color:var(--ink-light); letter-spacing:0.04em; text-transform:uppercase;">House-mades, juices, garnishes & other</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Batch Size</th>
+            <th>Batch Cost</th>
+            <th>Cost / oz</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="other-body">
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">
+                <div class="empty-icon"><i class="ti ti-leaf" style="font-size:32px;opacity:0.3;"></i></div>
+                <div class="empty-title">No other ingredients yet</div>
+                <div class="empty-sub">Add juices, syrups, garnishes, and house-made ingredients here.</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title">Import Inventory Spreadsheet</div>
+      <button class="icon-btn" onclick="closeModal('import-modal')"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon"><i class="ti ti-table-import" style="font-size:28px;color:var(--ink-light);"></i></div>
+        <div class="upload-title">Drop your inventory spreadsheet here</div>
+        <div class="upload-sub">Supports .xlsx files · Hamlet & Ghost inventory format</div>
+        <input type="file" id="file-input" accept=".xlsx" style="display:none;" onchange="handleFileSelect(event)">
+      </div>
+      <div style="font-family:var(--mono); font-size:11px; color:var(--ink-light); letter-spacing:0.04em; text-transform:uppercase; margin-bottom:8px;">Expected columns</div>
+      <div style="background:var(--parchment); border-radius:var(--radius); padding:10px 12px; font-family:var(--mono); font-size:11px; color:var(--ink-mid); line-height:1.8;">
+        Brand · Name · Category · Subcategory · Distributor · Reporting Unit · Unit Price
+      </div>
+      <div style="margin-top:1rem; font-size:12px; color:var(--ink-light);">
+        Beer and wine categories will be automatically excluded. Items with $0.00 pricing will be flagged as unpriced.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('import-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD INGREDIENT MODAL -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="add-modal-title">Add Ingredient</div>
+      <button class="icon-btn" onclick="closeModal('add-modal')"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="add-tab-bar" style="display:flex; border-bottom:1px solid var(--border); margin-bottom:1.25rem;">
+        <div class="tab active" id="add-tab-spirits" onclick="switchAddTab('spirits')" style="font-size:11px; padding:8px 16px;">Spirit / Mixer</div>
+        <div class="tab" id="add-tab-other" onclick="switchAddTab('other')" style="font-size:11px; padding:8px 16px;">Other Ingredient</div>
+      </div>
+
+      <div id="add-spirits-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Brand</label>
+            <input type="text" class="form-input" id="f-brand" placeholder="e.g. Barr Hill">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-input" id="f-name" placeholder="e.g. Tom Cat Gin">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Subcategory</label>
+            <select class="form-select" id="f-sub">
+              <option value="Bourbon">Bourbon</option>
+              <option value="Rye">Rye</option>
+              <option value="Scotch">Scotch</option>
+              <option value="Gin">Gin</option>
+              <option value="Vodka">Vodka</option>
+              <option value="Rum">Rum</option>
+              <option value="Tequila">Tequila</option>
+              <option value="Mezcal">Mezcal</option>
+              <option value="Cordials">Cordials</option>
+              <option value="Bitters">Bitters</option>
+              <option value="Amaro">Amaro</option>
+              <option value="Brandy">Brandy</option>
+              <option value="Mixer">Mixer</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Distributor</label>
+            <input type="text" class="form-input" id="f-dist" placeholder="e.g. Empire Merchants">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Bottle Size</label>
+            <select class="form-select" id="f-size" onchange="calcCostPerOz()">
+              <option value="750">750 mL</option>
+              <option value="1000">1 L (1000 mL)</option>
+              <option value="375">375 mL</option>
+              <option value="1750">1.75 L</option>
+              <option value="500">500 mL</option>
+              <option value="custom">Custom (mL)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bottle Cost ($)</label>
+            <input type="number" class="form-input" id="f-cost" placeholder="0.00" step="0.01" oninput="calcCostPerOz()">
+          </div>
+        </div>
+        <div id="custom-size-wrap" style="display:none;" class="form-group">
+          <label class="form-label">Custom Size (mL)</label>
+          <input type="number" class="form-input" id="f-size-custom" placeholder="e.g. 146" oninput="calcCostPerOz()">
+        </div>
+        <div class="calc-preview" id="cost-preview" style="display:none;"></div>
+      </div>
+
+      <div id="add-other-form" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Ingredient Name</label>
+          <input type="text" class="form-input" id="o-name" placeholder="e.g. Fresh Lime Juice">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="o-cat">
+              <option value="Juice">Juice</option>
+              <option value="Syrup">Syrup</option>
+              <option value="House-made">House-made</option>
+              <option value="Garnish">Garnish</option>
+              <option value="Dairy">Dairy</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Batch Size</label>
+            <select class="form-select" id="o-size" onchange="calcOtherCostPerOz()">
+              <option value="32">1 quart (32 oz)</option>
+              <option value="64">2 quarts (64 oz)</option>
+              <option value="16">1 pint (16 oz)</option>
+              <option value="128">1 gallon (128 oz)</option>
+              <option value="custom">Custom (oz)</option>
+            </select>
+          </div>
+        </div>
+        <div id="o-custom-size-wrap" style="display:none;" class="form-group">
+          <label class="form-label">Custom Size (oz)</label>
+          <input type="number" class="form-input" id="o-size-custom" placeholder="e.g. 48" oninput="calcOtherCostPerOz()">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Batch Cost ($)</label>
+            <input type="number" class="form-input" id="o-cost" placeholder="0.00" step="0.01" oninput="calcOtherCostPerOz()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <input type="text" class="form-input" id="o-notes" placeholder="e.g. Fresh squeezed daily">
+          </div>
+        </div>
+        <div class="calc-preview" id="o-cost-preview" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('add-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveIngredient()">Save ingredient</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL (reuses add modal structure, populated dynamically) -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Edit Ingredient</div>
+      <button class="icon-btn" onclick="closeModal('edit-modal')"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <div class="modal-body" id="edit-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" onclick="deleteIngredient()">Delete</button>
+      <div style="flex:1;"></div>
+      <button class="btn" onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://qgfrzhvgrilgxygoxjcn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Eq6r-RQzxU13f2A1sf3vHw_VoXb9tav';
+const LS_KEY = 'hg_app_data_v1';
+
+// ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
+async function sbRequest(method, path, body) {
+  const session = getSession();
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`
+  };
+  const res = await fetch(SUPABASE_URL + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+  return res.json().catch(() => null);
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function getSession() {
+  const raw = localStorage.getItem('hg_session');
+  if (!raw) return null;
+  try {
+    const session = JSON.parse(raw);
+    // Check if expired
+    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
+      localStorage.removeItem('hg_session');
+      return null;
+    }
+    return session;
+  } catch(e) { return null; }
+}
+
+async function signIn(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign in failed');
+  localStorage.setItem('hg_session', JSON.stringify(data));
+  return data;
+}
+
+async function signOut() {
+  const session = getSession();
+  if (session) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${session.access_token}` }
+    }).catch(() => {});
+  }
+  localStorage.removeItem('hg_session');
+  showLoginScreen();
+}
+
+function requireAuth() {
+  const session = getSession();
+  if (!session) {
+    showLoginScreen();
+    return false;
+  }
+  return true;
+}
+
+// ─── DATA LAYER ───────────────────────────────────────────────────────────────
+async function loadAppData() {
+  // Try Supabase first
+  try {
+    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+    if (rows && rows.length > 0 && rows[0].data) {
+      const data = rows[0].data;
+      // Update local cache
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+      return data;
+    }
+  } catch(e) {
+    console.warn('Supabase load failed, using local cache:', e.message);
+  }
+  // Fallback to localStorage cache
+  const cached = localStorage.getItem(LS_KEY);
+  if (cached) return JSON.parse(cached);
+  // Last resort: try old localStorage keys for migration
+  return migrateFromOldKeys();
+}
+
+async function saveAppData(data) {
+  // Always update local cache immediately
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+  // Save to Supabase
+  try {
+    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  } catch(e) {
+    console.warn('Supabase save failed, data cached locally:', e.message);
+  }
+}
+
+function migrateFromOldKeys() {
+  // Migrate from old separate localStorage keys
+  const spirits = localStorage.getItem('hg_spirits');
+  const other = localStorage.getItem('hg_other');
+  const recipes = localStorage.getItem('hg_recipes');
+  const menus = localStorage.getItem('hg_menus');
+  const importMeta = localStorage.getItem('hg_import_meta');
+  const salesData = localStorage.getItem('hg_sales_data');
+  
+  if (spirits || other || recipes || menus) {
+    const migrated = {
+      spirits: spirits ? JSON.parse(spirits) : [],
+      otherIngredients: other ? JSON.parse(other) : [],
+      recipes: recipes ? JSON.parse(recipes) : [],
+      menus: menus ? JSON.parse(menus) : [],
+      importMeta: importMeta ? JSON.parse(importMeta) : null,
+      salesData: salesData ? JSON.parse(salesData) : {}
+    };
+    console.log('Migrated data from old localStorage keys');
+    return migrated;
+  }
+  return { spirits: [], otherIngredients: [], recipes: [], menus: [], importMeta: null, salesData: {} };
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:#f5f2ec;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;">
+      <div style="background:white;border:1px solid rgba(26,24,18,0.1);border-radius:12px;padding:2.5rem;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <div style="text-align:center;margin-bottom:2rem;">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#1a1812;margin-bottom:4px;">Hamlet <span style="color:#c8392b;">&</span> Ghost</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#8a8680;">Cocktail Manager</div>
+        </div>
+        <div id="login-error" style="display:none;background:#f5e8e6;color:#c8392b;padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:1rem;"></div>
+        <div style="margin-bottom:12px;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Email</label>
+          <input type="email" id="login-email" placeholder="your@email.com" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:1.5rem;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button onclick="doLogin()" id="login-btn" style="width:100%;height:40px;background:#1a1812;color:#f5f2ec;border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Sign in</button>
+      </div>
+    </div>`;
+  // Re-import fonts since we wiped body
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap';
+  document.head.appendChild(link);
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  if (!email || !password) {
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.textContent = 'Signing in...';
+  btn.disabled = true;
+  errEl.style.display = 'none';
+  try {
+    await signIn(email, password);
+    window.location.reload();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.textContent = 'Sign in';
+    btn.disabled = false;
+  }
+}
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let spirits = [];
+let otherIngredients = [];
+let filteredSpirits = [];
+let currentTab = 'spirits';
+let currentPage = 1;
+const PAGE_SIZE = 20;
+let sortCol = 'name';
+let sortDir = 'asc';
+let showUnpricedOnly = false;
+let editingId = null;
+let importMeta = null;
+
+const EXCLUDED_CATEGORIES = ['Beer', 'Wine', 'Wine By The Glass'];
+const INCLUDE_CATEGORIES = ['Spirit', 'Mixer', 'Bar Goods', 'Accessory', 'Other'];
+
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
+async function save() {
+  const data = await loadAppData();
+  data.spirits = spirits;
+  data.otherIngredients = otherIngredients;
+  if (importMeta) data.importMeta = importMeta;
+  await saveAppData(data);
+}
+
+async function load() {
+  const data = await loadAppData();
+  spirits = data.spirits || [];
+  otherIngredients = data.otherIngredients || [];
+  importMeta = data.importMeta || null;
+  if (otherIngredients.length === 0) seedDefaults();
+}
+
+function seedDefaults() {
+  const defaults = [
+    { name: 'Simple Syrup', category: 'Syrup', sizeOz: 32, cost: 1.50, notes: '2:1 sugar to water, bring to simmer' },
+    { name: 'Honey Syrup', category: 'Syrup', sizeOz: 32, cost: 4.00, notes: '2:1 honey to water, no boil needed' },
+    { name: 'Vanilla Simple Syrup', category: 'Syrup', sizeOz: 32, cost: 5.00, notes: '3 vanilla beans scraped, sous vide 140°F 1hr+' },
+    { name: 'Cinnamon Syrup', category: 'Syrup', sizeOz: 32, cost: 3.00, notes: '10g crushed cinnamon, 1g kosher salt, sous vide 140°F 2hrs' },
+    { name: 'Ginger Syrup', category: 'Syrup', sizeOz: 32, cost: 4.00, notes: '2:1 sugar to ginger juice, bring to simmer' },
+    { name: 'Citric Acid Solution', category: 'House-made', sizeOz: 8, cost: 0.50, notes: '50g citric acid, 200g water, shake in deli container' },
+    { name: 'Saline Solution', category: 'House-made', sizeOz: 4, cost: 0.10, notes: '20g salt, 80g water, shake' },
+    { name: 'Olive Brine', category: 'House-made', sizeOz: 20, cost: 1.00, notes: '561g hot water, 31.2g kosher salt, 7.8g lactic acid' },
+    { name: 'Foam (Egg White)', category: 'House-made', sizeOz: 28, cost: 3.50, notes: '10oz OJ, 12oz egg white, 6oz Giffard Pamplemousse' },
+    { name: 'Fresh Lemon Juice', category: 'Juice', sizeOz: 32, cost: 8.00, notes: 'Fresh squeezed daily' },
+    { name: 'Fresh Lime Juice', category: 'Juice', sizeOz: 32, cost: 8.00, notes: 'Fresh squeezed daily' },
+    { name: 'Fresh Orange Juice', category: 'Juice', sizeOz: 32, cost: 5.00, notes: 'Fresh squeezed daily' },
+    { name: 'Pineapple Juice', category: 'Juice', sizeOz: 46, cost: 4.00, notes: 'Canned, unsweetened' },
+    { name: 'Cold Brew', category: 'Other', sizeOz: 32, cost: 6.00, notes: 'House-made or purchased' },
+  ];
+  otherIngredients = defaults.map(d => ({
+    id: crypto.randomUUID(),
+    name: d.name,
+    category: d.category,
+    sizeOz: d.sizeOz,
+    cost: d.cost,
+    costPerOz: Math.round((d.cost / d.sizeOz) * 1000) / 1000,
+    notes: d.notes,
+    source: 'default'
+  }));
+  localStorage.setItem('hg_other', JSON.stringify(otherIngredients));
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  if (!requireAuth()) return;
+  const session = getSession();
+  if (session && session.user) {
+    const el = document.getElementById('nav-user');
+    if (el) el.textContent = session.user.email;
+  }
+  await load();
+  updateSubtitle();
+  if (importMeta) renderImportBanner();
+  filterTable();
+  renderOtherTable();
+  populateFilterDropdowns();
+});
+
+function updateSubtitle() {
+  const total = spirits.length + otherIngredients.length;
+  const unpriced = spirits.filter(s => !s.cost || s.cost === 0).length;
+  document.getElementById('lib-sub').textContent =
+    total === 0 ? 'No ingredients yet — import a spreadsheet to get started'
+    : `${total} ingredients · ${unpriced} unpriced`;
+  document.getElementById('count-spirits').textContent = spirits.length;
+  document.getElementById('count-other').textContent = otherIngredients.length;
+}
+
+// ─── NAV ─────────────────────────────────────────────────────────────────────
+function showNav(el) {
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-spirits').classList.toggle('active', tab === 'spirits');
+  document.getElementById('tab-other').classList.toggle('active', tab === 'other');
+  document.getElementById('spirits-panel').style.display = tab === 'spirits' ? 'block' : 'none';
+  document.getElementById('other-panel').style.display = tab === 'other' ? 'block' : 'none';
+  if (tab === 'spirits') filterTable();
+}
+
+// ─── IMPORT ───────────────────────────────────────────────────────────────────
+function openImportModal() {
+  document.getElementById('import-modal').classList.add('open');
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  closeModal('import-modal');
+  processXLSX(file);
+}
+
+function processXLSX(file) {
+  const progress = document.getElementById('import-progress');
+  const bar = document.getElementById('progress-bar');
+  const label = document.getElementById('progress-label');
+  const sub = document.getElementById('progress-sub');
+  progress.classList.add('show');
+  bar.style.width = '10%';
+  label.textContent = 'Reading file...';
+  sub.textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      bar.style.width = '40%';
+      label.textContent = 'Parsing spreadsheet...';
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      // Get all rows as arrays first
+      const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      bar.style.width = '70%';
+      label.textContent = 'Filtering categories...';
+      sub.textContent = 'Excluding beer & wine';
+
+      // Find the header row — look for a row containing 'Brand'
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(allRows.length, 5); i++) {
+        if (allRows[i].some(cell => String(cell).trim() === 'Brand')) {
+          headerIdx = i;
+          break;
+        }
+      }
+      if (headerIdx === -1) {
+        throw new Error('Could not find header row with "Brand" column');
+      }
+
+      const headers = allRows[headerIdx].map(h => String(h).trim());
+      const dataRows = allRows.slice(headerIdx + 1);
+
+      // Build column index map
+      const col = {};
+      headers.forEach((h, i) => { col[h] = i; });
+
+      const parsed = [];
+      dataRows.forEach(row => {
+        const get = (key) => (row[col[key]] !== undefined ? String(row[col[key]]).trim() : '');
+        const cat = get('Category');
+        const subcat = get('Subcategory');
+        if (EXCLUDED_CATEGORIES.includes(cat)) return;
+        const brand = get('Brand');
+        const name = get('Name');
+        if (!brand && !name) return;
+
+        const unitRaw = get('Reporting Unit');
+        const sizeML = parseBottleSize(unitRaw);
+        const priceRaw = get('Unit Price').replace(/[$,]/g, '');
+        const cost = parseFloat(priceRaw) || 0;
+        const costPerOz = sizeML > 0 && cost > 0 ? cost / (sizeML / 29.5735) : 0;
+
+        parsed.push({
+          id: crypto.randomUUID(),
+          brand, name,
+          category: cat,
+          subcategory: subcat || cat,
+          distributor: get('Distributor'),
+          sizeML,
+          sizeLabel: unitRaw,
+          cost,
+          costPerOz: Math.round(costPerOz * 1000) / 1000,
+          source: 'import'
+        });
+      });
+
+      bar.style.width = '100%';
+      label.textContent = 'Done!';
+
+      spirits = parsed;
+      const unpriced = parsed.filter(p => !p.cost || p.cost === 0).length;
+      importMeta = {
+        filename: file.name,
+        count: parsed.length,
+        unpriced,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      };
+      save();
+
+      setTimeout(() => {
+        progress.classList.remove('show');
+        bar.style.width = '0%';
+        renderImportBanner();
+        filterTable();
+        populateFilterDropdowns();
+        updateSubtitle();
+        showToast(`✓ Imported ${parsed.length} ingredients · ${unpriced} unpriced`);
+      }, 600);
+    } catch(err) {
+      progress.classList.remove('show');
+      showToast('Error reading file — check format and try again');
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseBottleSize(unit) {
+  unit = unit.toLowerCase();
+  const mlMatch = unit.match(/(\d+(?:\.\d+)?)\s*ml/);
+  if (mlMatch) return parseFloat(mlMatch[1]);
+  const lMatch = unit.match(/(\d+(?:\.\d+)?)\s*l\b/);
+  if (lMatch) return parseFloat(lMatch[1]) * 1000;
+  const ozMatch = unit.match(/(\d+(?:\.\d+)?)\s*fl\.?\s*oz/);
+  if (ozMatch) return parseFloat(ozMatch[1]) * 29.5735;
+  const galMatch = unit.match(/(\d+(?:\.\d+)?)\s*gal/);
+  if (galMatch) return parseFloat(galMatch[1]) * 3785.41;
+  return 750;
+}
+
+function renderImportBanner() {
+  if (!importMeta) return;
+  const banner = document.getElementById('import-banner');
+  banner.style.display = 'flex';
+  document.getElementById('banner-filename').textContent = importMeta.filename;
+  document.getElementById('banner-count').textContent = `${importMeta.count} items imported`;
+  document.getElementById('banner-date').textContent = importMeta.date;
+  const unpricedBadge = document.getElementById('unpriced-badge');
+  if (importMeta.unpriced > 0) {
+    unpricedBadge.style.display = 'flex';
+    document.getElementById('unpriced-count').textContent = importMeta.unpriced;
+  }
+}
+
+// ─── TABLE RENDER ─────────────────────────────────────────────────────────────
+function filterTable() {
+  const query = document.getElementById('search-input').value.toLowerCase();
+  const cat = document.getElementById('filter-category').value;
+  const sub = document.getElementById('filter-sub').value;
+
+  filteredSpirits = spirits.filter(s => {
+    const matchSearch = !query ||
+      `${s.brand} ${s.name} ${s.subcategory} ${s.distributor}`.toLowerCase().includes(query);
+    const matchCat = !cat || s.category === cat;
+    const matchSub = !sub || s.subcategory === sub;
+    const matchUnpriced = !showUnpricedOnly || !s.cost || s.cost === 0;
+    return matchSearch && matchCat && matchSub && matchUnpriced;
+  });
+
+  // Sort
+  filteredSpirits.sort((a, b) => {
+    let av, bv;
+    switch(sortCol) {
+      case 'name': av = `${a.brand} ${a.name}`.toLowerCase(); bv = `${b.brand} ${b.name}`.toLowerCase(); break;
+      case 'subcategory': av = a.subcategory.toLowerCase(); bv = b.subcategory.toLowerCase(); break;
+      case 'cost': av = a.cost; bv = b.cost; break;
+      case 'per_oz': av = a.costPerOz; bv = b.costPerOz; break;
+      case 'distributor': av = a.distributor.toLowerCase(); bv = b.distributor.toLowerCase(); break;
+      default: av = `${a.brand} ${a.name}`.toLowerCase(); bv = `${b.brand} ${b.name}`.toLowerCase();
+    }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  currentPage = 1;
+  renderTablePage();
+}
+
+function sortTable(col) {
+  if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortCol = col; sortDir = 'asc'; }
+  document.querySelectorAll('th').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+  });
+  filterTable();
+}
+
+function renderTablePage() {
+  const tbody = document.getElementById('table-body');
+  const total = filteredSpirits.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const slice = filteredSpirits.slice(start, start + PAGE_SIZE);
+
+  if (slice.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      <div class="empty-icon"><i class="ti ti-search" style="font-size:32px;opacity:0.3;"></i></div>
+      <div class="empty-title">No results</div>
+      <div class="empty-sub">Try adjusting your search or filters.</div>
+    </div></td></tr>`;
+    document.getElementById('pagination').style.display = 'none';
+    return;
+  }
+
+  tbody.innerHTML = slice.map(ing => `
+    <tr>
+      <td>
+        <div class="ing-name">${ing.brand || ''}${ing.brand && ing.name ? ' — ' : ''}${ing.name || ''}</div>
+        ${ing.source === 'import' ? '' : '<div class="ing-brand">Manual entry</div>'}
+      </td>
+      <td>${badgeHTML(ing.subcategory)}</td>
+      <td style="font-family:var(--mono); font-size:12px;">${formatSize(ing.sizeML)}</td>
+      <td>${ing.cost ? `<span class="cost-val">$${ing.cost.toFixed(2)}</span>` : noPriceHTML()}</td>
+      <td>${ing.costPerOz ? `<span class="cost-per-oz">$${ing.costPerOz.toFixed(3)}</span>` : '<span style="color:var(--ink-ghost);">—</span>'}</td>
+      <td class="distributor">${ing.distributor || '—'}</td>
+      <td><div class="row-actions">
+        <button class="icon-btn" title="Edit" onclick="openEditModal('${ing.id}')"><i class="ti ti-pencil" aria-hidden="true"></i></button>
+        <button class="icon-btn danger" title="Delete" onclick="confirmDelete('${ing.id}')"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </div></td>
+    </tr>
+  `).join('');
+
+  // Pagination
+  const pag = document.getElementById('pagination');
+  const pagInfo = document.getElementById('page-info');
+  const pagControls = document.getElementById('page-controls');
+  if (totalPages <= 1) { pag.style.display = 'none'; return; }
+  pag.style.display = 'flex';
+  pagInfo.textContent = `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, total)} of ${total}`;
+  let html = `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goPage(${currentPage - 1})">‹</button>`;
+  for (let i = 1; i <= Math.min(totalPages, 7); i++) {
+    html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (totalPages > 7) html += `<span style="font-family:var(--mono);font-size:11px;color:var(--ink-light);padding:0 4px;">...</span><button class="page-btn ${currentPage === totalPages ? 'active' : ''}" onclick="goPage(${totalPages})">${totalPages}</button>`;
+  html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goPage(${currentPage + 1})">›</button>`;
+  pagControls.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; renderTablePage(); }
+
+function badgeHTML(sub) {
+  const map = {
+    'Bourbon': 'badge-bourbon', 'Rye': 'badge-rye', 'Scotch': 'badge-scotch',
+    'Gin': 'badge-gin', 'Vodka': 'badge-vodka', 'Rum': 'badge-rum',
+    'Tequila': 'badge-tequila', 'Mezcal': 'badge-mezcal',
+    'Cordials': 'badge-cordials', 'Cordial': 'badge-cordials',
+    'Cordials & Liqueurs': 'badge-cordials',
+    'Bitters': 'badge-bitters', 'Mixer': 'badge-mixer', 'Mixers': 'badge-mixer',
+    'Amaro': 'badge-bitters', 'Brandy': 'badge-other', 'Brandy/Fruit': 'badge-other'
+  };
+  const cls = map[sub] || 'badge-other';
+  return `<span class="badge ${cls}">${sub || 'Other'}</span>`;
+}
+
+function noPriceHTML() {
+  return `<span class="no-price">⚠ No price</span>`;
+}
+
+function formatSize(ml) {
+  if (!ml) return '—';
+  if (ml >= 1000) return `${(ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 2)} L`;
+  return `${ml} mL`;
+}
+
+// ─── OTHER INGREDIENTS TABLE ──────────────────────────────────────────────────
+function renderOtherTable() {
+  const tbody = document.getElementById('other-body');
+  if (otherIngredients.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      <div class="empty-icon"><i class="ti ti-leaf" style="font-size:32px;opacity:0.3;"></i></div>
+      <div class="empty-title">No other ingredients yet</div>
+      <div class="empty-sub">Add juices, syrups, garnishes, and house-made ingredients here.</div>
+    </div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = otherIngredients.map(ing => `
+    <tr>
+      <td><div class="ing-name">${ing.name}</div></td>
+      <td><span class="badge badge-other">${ing.category}</span></td>
+      <td style="font-family:var(--mono);font-size:12px;">${ing.sizeOz} oz</td>
+      <td>${ing.cost ? `<span class="cost-val">$${parseFloat(ing.cost).toFixed(2)}</span>` : noPriceHTML()}</td>
+      <td>${ing.costPerOz ? `<span class="cost-per-oz">$${parseFloat(ing.costPerOz).toFixed(3)}</span>` : '—'}</td>
+      <td class="distributor">${ing.notes || '—'}</td>
+      <td><div class="row-actions">
+        <button class="icon-btn" onclick="openEditOther('${ing.id}')"><i class="ti ti-pencil" aria-hidden="true"></i></button>
+        <button class="icon-btn danger" onclick="deleteOther('${ing.id}')"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </div></td>
+    </tr>
+  `).join('');
+}
+
+// ─── FILTER DROPDOWNS ────────────────────────────────────────────────────────
+function populateFilterDropdowns() {
+  const cats = [...new Set(spirits.map(s => s.category).filter(Boolean))].sort();
+  const subs = [...new Set(spirits.map(s => s.subcategory).filter(Boolean))].sort();
+  const catSel = document.getElementById('filter-category');
+  const subSel = document.getElementById('filter-sub');
+  catSel.innerHTML = '<option value="">All categories</option>' +
+    cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  subSel.innerHTML = '<option value="">All subcategories</option>' +
+    subs.map(s => `<option value="${s}">${s}</option>`).join('');
+}
+
+function toggleUnpriced() {
+  showUnpricedOnly = !showUnpricedOnly;
+  document.getElementById('btn-unpriced').classList.toggle('active', showUnpricedOnly);
+  filterTable();
+}
+
+// ─── ADD / EDIT ───────────────────────────────────────────────────────────────
+function openAddModal() {
+  editingId = null;
+  document.getElementById('add-modal-title').textContent = 'Add Ingredient';
+  clearAddForm();
+  document.getElementById('add-modal').classList.add('open');
+}
+
+function clearAddForm() {
+  ['f-brand','f-name','f-dist','f-cost'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('f-sub').value = 'Bourbon';
+  document.getElementById('f-size').value = '750';
+  document.getElementById('cost-preview').style.display = 'none';
+  document.getElementById('custom-size-wrap').style.display = 'none';
+  ['o-name','o-cost','o-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('o-cost-preview').style.display = 'none';
+}
+
+function switchAddTab(tab) {
+  document.getElementById('add-tab-spirits').classList.toggle('active', tab === 'spirits');
+  document.getElementById('add-tab-other').classList.toggle('active', tab === 'other');
+  document.getElementById('add-spirits-form').style.display = tab === 'spirits' ? 'block' : 'none';
+  document.getElementById('add-other-form').style.display = tab === 'other' ? 'block' : 'none';
+}
+
+function calcCostPerOz() {
+  const sizeVal = document.getElementById('f-size').value;
+  const customWrap = document.getElementById('custom-size-wrap');
+  customWrap.style.display = sizeVal === 'custom' ? 'block' : 'none';
+  const ml = sizeVal === 'custom'
+    ? parseFloat(document.getElementById('f-size-custom').value) || 0
+    : parseFloat(sizeVal) || 750;
+  const cost = parseFloat(document.getElementById('f-cost').value) || 0;
+  const preview = document.getElementById('cost-preview');
+  if (ml > 0 && cost > 0) {
+    const oz = ml / 29.5735;
+    const perOz = cost / oz;
+    preview.style.display = 'block';
+    preview.textContent = `Cost per oz: $${perOz.toFixed(3)} · ${oz.toFixed(1)} oz total`;
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function calcOtherCostPerOz() {
+  const sizeVal = document.getElementById('o-size').value;
+  const customWrap = document.getElementById('o-custom-size-wrap');
+  customWrap.style.display = sizeVal === 'custom' ? 'block' : 'none';
+  const oz = sizeVal === 'custom'
+    ? parseFloat(document.getElementById('o-size-custom').value) || 0
+    : parseFloat(sizeVal) || 32;
+  const cost = parseFloat(document.getElementById('o-cost').value) || 0;
+  const preview = document.getElementById('o-cost-preview');
+  if (oz > 0 && cost > 0) {
+    const perOz = cost / oz;
+    preview.style.display = 'block';
+    preview.textContent = `Cost per oz: $${perOz.toFixed(3)}`;
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function saveIngredient() {
+  // Check which sub-form is active
+  const isOther = document.getElementById('add-other-form').style.display !== 'none';
+  if (isOther) {
+    saveOtherIngredient();
+    return;
+  }
+  const brand = document.getElementById('f-brand').value.trim();
+  const name = document.getElementById('f-name').value.trim();
+  if (!brand && !name) { showToast('Enter a brand or name'); return; }
+  const sizeVal = document.getElementById('f-size').value;
+  const ml = sizeVal === 'custom'
+    ? parseFloat(document.getElementById('f-size-custom').value) || 750
+    : parseFloat(sizeVal) || 750;
+  const cost = parseFloat(document.getElementById('f-cost').value) || 0;
+  const costPerOz = ml > 0 && cost > 0 ? cost / (ml / 29.5735) : 0;
+  const ing = {
+    id: crypto.randomUUID(),
+    brand, name,
+    category: 'Spirit',
+    subcategory: document.getElementById('f-sub').value,
+    distributor: document.getElementById('f-dist').value.trim(),
+    sizeML: ml,
+    sizeLabel: `bottle (${ml >= 1000 ? ml/1000 + 'L' : ml + 'mL'})`,
+    cost, costPerOz: Math.round(costPerOz * 1000) / 1000,
+    source: 'manual'
+  };
+  spirits.push(ing);
+  save();
+  filterTable();
+  updateSubtitle();
+  closeModal('add-modal');
+  showToast(`✓ Added ${brand || name}`);
+}
+
+function saveOtherIngredient() {
+  const name = document.getElementById('o-name').value.trim();
+  if (!name) { showToast('Enter ingredient name'); return; }
+  const sizeVal = document.getElementById('o-size').value;
+  const oz = sizeVal === 'custom'
+    ? parseFloat(document.getElementById('o-size-custom').value) || 32
+    : parseFloat(sizeVal) || 32;
+  const cost = parseFloat(document.getElementById('o-cost').value) || 0;
+  const costPerOz = oz > 0 && cost > 0 ? cost / oz : 0;
+  const ing = {
+    id: crypto.randomUUID(),
+    name,
+    category: document.getElementById('o-cat').value,
+    sizeOz: oz,
+    cost, costPerOz: Math.round(costPerOz * 1000) / 1000,
+    notes: document.getElementById('o-notes').value.trim(),
+    source: 'manual'
+  };
+  otherIngredients.push(ing);
+  save();
+  renderOtherTable();
+  updateSubtitle();
+  closeModal('add-modal');
+  showToast(`✓ Added ${name}`);
+}
+
+function openEditModal(id) {
+  const ing = spirits.find(s => s.id === id);
+  if (!ing) return;
+  editingId = id;
+  const body = document.getElementById('edit-modal-body');
+  body.innerHTML = `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Brand</label><input type="text" class="form-input" id="e-brand" value="${ing.brand || ''}"></div>
+      <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="e-name" value="${ing.name || ''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Subcategory</label>
+        <select class="form-select" id="e-sub">
+          ${['Bourbon','Rye','Scotch','Gin','Vodka','Rum','Tequila','Mezcal','Cordials','Bitters','Amaro','Brandy','Mixer','Other'].map(o => `<option value="${o}" ${o === ing.subcategory ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Distributor</label><input type="text" class="form-input" id="e-dist" value="${ing.distributor || ''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Bottle Cost ($)</label><input type="number" class="form-input" id="e-cost" value="${ing.cost || ''}" step="0.01" oninput="updateEditPreview()"></div>
+      <div class="form-group"><label class="form-label">Bottle Size (mL)</label><input type="number" class="form-input" id="e-size" value="${ing.sizeML || 750}" oninput="updateEditPreview()"></div>
+    </div>
+    <div class="calc-preview" id="e-preview">${ing.costPerOz ? `Cost per oz: $${ing.costPerOz.toFixed(3)}` : ''}</div>
+  `;
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function updateEditPreview() {
+  const cost = parseFloat(document.getElementById('e-cost').value) || 0;
+  const ml = parseFloat(document.getElementById('e-size').value) || 750;
+  const preview = document.getElementById('e-preview');
+  if (cost > 0 && ml > 0) {
+    const perOz = cost / (ml / 29.5735);
+    preview.style.display = 'block';
+    preview.textContent = `Cost per oz: $${perOz.toFixed(3)}`;
+  }
+}
+
+function saveEdit() {
+  const idx = spirits.findIndex(s => s.id === editingId);
+  if (idx === -1) return;
+  const cost = parseFloat(document.getElementById('e-cost').value) || 0;
+  const ml = parseFloat(document.getElementById('e-size').value) || 750;
+  const costPerOz = cost > 0 && ml > 0 ? cost / (ml / 29.5735) : 0;
+  spirits[idx] = {
+    ...spirits[idx],
+    brand: document.getElementById('e-brand').value.trim(),
+    name: document.getElementById('e-name').value.trim(),
+    subcategory: document.getElementById('e-sub').value,
+    distributor: document.getElementById('e-dist').value.trim(),
+    cost, sizeML: ml,
+    costPerOz: Math.round(costPerOz * 1000) / 1000
+  };
+  save();
+  filterTable();
+  updateSubtitle();
+  closeModal('edit-modal');
+  showToast('✓ Ingredient updated');
+}
+
+function confirmDelete(id) {
+  const ing = spirits.find(s => s.id === id);
+  if (!ing) return;
+  if (confirm(`Delete "${[ing.brand, ing.name].filter(Boolean).join(" — ")}"? This cannot be undone.`)) {
+    spirits = spirits.filter(s => s.id !== id);
+    save();
+    filterTable();
+    updateSubtitle();
+    showToast("Ingredient deleted");
+  }
+}
+
+function deleteIngredient() {
+  spirits = spirits.filter(s => s.id !== editingId);
+  save();
+  filterTable();
+  updateSubtitle();
+  closeModal("edit-modal");
+  showToast("Ingredient deleted");
+}
+
+function openEditOther(id) {
+  const ing = otherIngredients.find(o => o.id === id);
+  if (!ing) return;
+  editingId = id;
+  const body = document.getElementById('edit-modal-body');
+  body.innerHTML = `
+    <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="eo-name" value="${ing.name}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="eo-cat">
+          ${['Juice','Syrup','House-made','Garnish','Dairy','Other'].map(o => `<option value="${o}" ${o === ing.category ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Batch Size (oz)</label><input type="number" class="form-input" id="eo-size" value="${ing.sizeOz}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Batch Cost ($)</label><input type="number" class="form-input" id="eo-cost" value="${ing.cost || ''}"></div>
+      <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="eo-notes" value="${ing.notes || ''}"></div>
+    </div>
+  `;
+  document.getElementById('edit-modal').querySelector('.modal-title').textContent = 'Edit Other Ingredient';
+  document.getElementById('edit-modal').querySelector('[onclick="saveEdit()"]').onclick = saveOtherEdit;
+  document.getElementById('edit-modal').querySelector('[onclick="deleteIngredient()"]').onclick = deleteOtherIngredient;
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function saveOtherEdit() {
+  const idx = otherIngredients.findIndex(o => o.id === editingId);
+  if (idx === -1) return;
+  const cost = parseFloat(document.getElementById('eo-cost').value) || 0;
+  const oz = parseFloat(document.getElementById('eo-size').value) || 32;
+  const costPerOz = cost > 0 && oz > 0 ? cost / oz : 0;
+  otherIngredients[idx] = {
+    ...otherIngredients[idx],
+    name: document.getElementById('eo-name').value.trim(),
+    category: document.getElementById('eo-cat').value,
+    sizeOz: oz, cost,
+    costPerOz: Math.round(costPerOz * 1000) / 1000,
+    notes: document.getElementById('eo-notes').value.trim()
+  };
+  save();
+  renderOtherTable();
+  updateSubtitle();
+  closeModal('edit-modal');
+  showToast('✓ Ingredient updated');
+}
+
+function deleteOtherIngredient() {
+  otherIngredients = otherIngredients.filter(o => o.id !== editingId);
+  save();
+  renderOtherTable();
+  updateSubtitle();
+  closeModal('edit-modal');
+  showToast('Ingredient deleted');
+}
+
+// ─── MODAL UTILS ─────────────────────────────────────────────────────────────
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
