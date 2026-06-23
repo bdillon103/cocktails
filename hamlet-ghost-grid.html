@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hamlet & Ghost — Menu Grid</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#1a1812;--ink-mid:#4a4640;--ink-light:#8a8680;--ink-ghost:#c8c4bc;
+  --parchment:#f5f2ec;--parchment-dark:#ede9e0;--parchment-mid:#e8e4db;
+  --accent:#c8392b;--accent-dim:#f5e8e6;--gold:#b8860b;--gold-dim:#f0e8d0;
+  --green:#2d6a4f;--green-dim:#d8ecd4;--blue:#1a4a7a;--blue-dim:#dce8f5;
+  --border:rgba(26,24,18,0.1);--border-mid:rgba(26,24,18,0.2);
+  --radius:6px;--radius-lg:10px;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--parchment);color:var(--ink);font-family:var(--sans);font-size:14px;min-height:100vh;}
+.nav{background:var(--ink);padding:0 2rem;display:flex;align-items:center;height:52px;border-bottom:2px solid var(--accent);}
+.nav-brand{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--parchment);letter-spacing:0.08em;text-transform:uppercase;margin-right:2rem;white-space:nowrap;}
+.nav-brand span{color:var(--accent);}
+.nav-links{display:flex;flex:1;}
+.nav-link{font-family:var(--mono);font-size:11px;color:var(--ink-ghost);letter-spacing:0.06em;text-transform:uppercase;padding:0 1rem;height:52px;display:flex;align-items:center;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color 0.15s;white-space:nowrap;text-decoration:none;}
+.nav-link:hover{color:var(--parchment);}
+.nav-link.active{color:var(--parchment);border-bottom-color:var(--accent);}
+.page{max-width:1400px;margin:0 auto;padding:1.5rem 2rem;}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;gap:1rem;flex-wrap:wrap;}
+.page-title{font-family:var(--mono);font-size:22px;font-weight:500;letter-spacing:-0.02em;}
+.page-meta{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--ink-light);margin-top:4px;flex-wrap:wrap;}
+.btn{height:34px;border:1px solid var(--border-mid);border-radius:var(--radius);padding:0 14px;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase;background:var(--parchment);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;white-space:nowrap;text-decoration:none;}
+.btn:hover{background:var(--parchment-mid);}
+.btn-primary{background:var(--ink);color:var(--parchment);border-color:var(--ink);}
+.btn-sm{height:28px;font-size:10px;padding:0 10px;}
+.icon-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--ink-light);cursor:pointer;background:transparent;transition:all 0.15s;font-size:13px;flex-shrink:0;text-decoration:none;}
+.icon-btn:hover{color:var(--ink);border-color:var(--border-mid);background:var(--parchment);}
+.summary-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1.25rem;}
+.summary-card{background:white;border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;}
+.sc-label{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-light);margin-bottom:6px;}
+.sc-val{font-size:20px;font-weight:500;font-family:var(--mono);line-height:1.2;}
+.sc-sub{font-size:11px;color:var(--ink-light);margin-top:3px;}
+.ok{color:var(--green);}.warn{color:var(--gold);}.bad{color:var(--accent);}
+.filter-bar{display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap;}
+.search-wrap{position:relative;min-width:180px;}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ink-light);font-size:13px;pointer-events:none;}
+.search-input{width:100%;height:30px;border:1px solid var(--border-mid);border-radius:20px;padding:0 10px 0 30px;font-family:var(--sans);font-size:12px;background:white;color:var(--ink);outline:none;}
+.filter-pill{height:30px;border:1px solid var(--border);border-radius:20px;padding:0 12px;font-family:var(--mono);font-size:11px;display:inline-flex;align-items:center;gap:5px;color:var(--ink-light);cursor:pointer;background:white;transition:all 0.15s;}
+select.filter-select{height:30px;border:1px solid var(--border);border-radius:20px;padding:0 24px 0 12px;font-family:var(--mono);font-size:11px;background:white;color:var(--ink-mid);cursor:pointer;outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a8680' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+.legend{display:flex;gap:14px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-light);font-family:var(--mono);}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.table-wrap{background:white;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;min-width:900px;}
+thead{background:var(--parchment-dark);}
+th{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:0.07em;text-transform:uppercase;color:var(--ink-light);padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;}
+th:hover{color:var(--ink);}
+th.sorted{color:var(--ink);}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:12px;}
+tr:last-child td{border-bottom:none;}
+tr:nth-child(even) td{background:rgba(245,242,236,0.5);}
+tr:hover td{background:var(--parchment) !important;cursor:pointer;}
+.drink-name{font-weight:500;font-size:13px;}
+.thumb{width:30px;height:30px;border-radius:var(--radius);background:var(--parchment-dark);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+.batch-badge{display:inline-flex;align-items:center;gap:2px;padding:1px 5px;border-radius:10px;font-size:9px;font-family:var(--mono);background:var(--blue-dim);color:var(--blue);margin-left:4px;}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-family:var(--mono);font-size:10px;font-weight:500;white-space:nowrap;}
+.b-shaken{background:#e0f0ec;color:#085041;}
+.b-stirred{background:#eeedfe;color:#3c3489;}
+.b-built{background:#faeeda;color:#633806;}
+.b-carbonated{background:#dceaf5;color:#0c447c;}
+.b-frozen{background:#fbeaf0;color:#72243e;}
+.b-spirit{background:var(--parchment-dark);color:var(--ink-mid);}
+.pc-ok{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--green);}
+.pc-warn{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--gold);}
+.pc-bad{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--accent);}
+.pc-unknown{font-family:var(--mono);font-size:12px;color:var(--ink-ghost);font-style:italic;}
+.price-val{font-family:var(--mono);font-size:12px;font-weight:500;}
+.family-val{font-size:11px;color:var(--ink-light);}
+.summary-text{font-size:11px;color:var(--ink-light);max-width:180px;line-height:1.4;}
+.table-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);background:var(--parchment-dark);font-family:var(--mono);font-size:11px;color:var(--ink-light);}
+.page-controls{display:flex;gap:4px;}
+.page-btn{width:26px;height:26px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:var(--mono);font-size:11px;background:white;color:var(--ink);}
+.page-btn.active{background:var(--ink);color:var(--parchment);border-color:var(--ink);}
+.empty-state{text-align:center;padding:4rem 2rem;color:var(--ink-light);}
+.empty-icon{font-size:36px;opacity:0.2;margin-bottom:12px;}
+.empty-title{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--ink-mid);margin-bottom:8px;}
+.col-toggle-wrap{position:relative;}
+.col-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);background:white;border:1px solid var(--border-mid);border-radius:var(--radius-lg);padding:8px;z-index:50;min-width:180px;box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+.col-menu.open{display:block;}
+.col-item{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;cursor:pointer;border-radius:var(--radius);}
+.col-item:hover{background:var(--parchment);}
+.col-check{width:14px;height:14px;border:1px solid var(--border-mid);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;}
+.col-check.on{background:var(--ink);border-color:var(--ink);color:white;}
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--ink);color:var(--parchment);padding:10px 16px;border-radius:var(--radius);font-family:var(--mono);font-size:12px;border-left:3px solid var(--accent);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;z-index:200;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">Hamlet <span>&</span> Ghost</div>
+  <div class="nav-links">
+    <a class="nav-link" href="hamlet-ghost-ingredients.html">Ingredients</a>
+    <a class="nav-link" href="hamlet-ghost-recipes.html">Recipes</a>
+    <a class="nav-link active" href="hamlet-ghost-grid.html">Menu Grid</a>
+    <a class="nav-link" href="hamlet-ghost-dashboard.html">Dashboard</a>
+    <a class="nav-link" href="hamlet-ghost-manager.html">Menu Manager</a>
+    <a class="nav-link" href="hamlet-ghost-specsheet.html">Spec Sheet</a>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+    <span id="nav-user" style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(200,196,188,0.6);letter-spacing:0.04em;"></span>
+    <button onclick="signOut()" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(200,196,188,0.7);padding:0 12px;height:28px;border-radius:4px;cursor:pointer;">Sign out</button>
+  </div>
+</div>
+</nav>
+<main class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title" id="menu-title">Menu Grid</div>
+      <div class="page-meta" id="page-meta">Loading...</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
+      <a class="btn btn-primary" href="hamlet-ghost-recipes.html"><i class="ti ti-plus"></i> Add cocktail</a>
+    </div>
+  </div>
+  <div class="summary-row">
+    <div class="summary-card"><div class="sc-label">Total cocktails</div><div class="sc-val" id="sc-total">—</div></div>
+    <div class="summary-card"><div class="sc-label">Avg pour cost</div><div class="sc-val" id="sc-avg">—</div><div class="sc-sub" id="sc-avg-sub">Target: 20%</div></div>
+    <div class="summary-card"><div class="sc-label">Over target</div><div class="sc-val warn" id="sc-over">—</div><div class="sc-sub" id="sc-over-sub">—</div></div>
+    <div class="summary-card"><div class="sc-label">Unpriced</div><div class="sc-val bad" id="sc-unpriced">—</div><div class="sc-sub">cost unknown</div></div>
+    <div class="summary-card"><div class="sc-label">Avg menu price</div><div class="sc-val" id="sc-price">—</div></div>
+  </div>
+  <div class="filter-bar">
+    <div class="search-wrap">
+      <i class="ti ti-search search-icon"></i>
+      <input type="text" class="search-input" placeholder="Search drinks..." id="search-input" oninput="applyFilters()">
+    </div>
+    <select class="filter-select" id="f-style" onchange="applyFilters()">
+      <option value="">All styles</option>
+      <option>Stirred</option><option>Shaken</option><option>Built</option><option>Carbonated</option><option>Frozen</option>
+    </select>
+    <select class="filter-select" id="f-family" onchange="applyFilters()"><option value="">All families</option></select>
+    <select class="filter-select" id="f-spirit" onchange="applyFilters()"><option value="">All spirits</option></select>
+    <select class="filter-select" id="f-cost" onchange="applyFilters()">
+      <option value="">All pour costs</option>
+      <option value="ok">Under target</option>
+      <option value="warn">Near target</option>
+      <option value="bad">Over target</option>
+      <option value="unknown">Unpriced</option>
+    </select>
+    <div class="col-toggle-wrap" style="margin-left:auto;">
+      <button class="btn btn-sm" onclick="toggleColMenu()"><i class="ti ti-layout-columns"></i> Columns</button>
+      <div class="col-menu" id="col-menu"></div>
+    </div>
+  </div>
+  <div class="legend">
+    <span style="font-family:var(--mono);font-size:10px;font-weight:500;color:var(--ink-light);text-transform:uppercase;letter-spacing:0.05em;">Pour cost:</span>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green);"></div> Under target</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--gold);"></div> Within 25%</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent);"></div> Over target</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--ink-ghost);"></div> Unpriced</div>
+  </div>
+  <div class="table-wrap">
+    <table id="grid-table">
+      <thead id="grid-head"></thead>
+      <tbody id="grid-body"></tbody>
+    </table>
+    <div class="table-footer">
+      <span id="table-info">—</span>
+      <div class="page-controls" id="page-controls"></div>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+var recipes = [];
+var spirits = [];
+var otherIngredients = [];
+var filtered = [];
+var sortCol = 'name';
+var sortDir = 'asc';
+var currentPage = 1;
+var PAGE_SIZE = 16;
+var COGS_TARGET = 20;
+var NEGLIGIBLE = ['dash','barspoon','rinse'];
+
+var COLS = [
+  {key:'name',      label:'Name',               on:true},
+  {key:'price',     label:'Price',              on:true},
+  {key:'pourCost',  label:'Pour Cost',          on:true},
+  {key:'style',     label:'Style',              on:true},
+  {key:'family',    label:'Family',             on:true},
+  {key:'bartender', label:'Bartender',          on:true},
+  {key:'summary',   label:'Ingredient Summary', on:true},
+  {key:'spirit',    label:'Base Spirit',        on:true},
+  {key:'garnish',   label:'Garnish',            on:true},
+  {key:'glass',     label:'Glass',              on:true},
+  {key:'ice',       label:'Ice',                on:true},
+  {key:'actions',   label:'',                   on:true},
+];
+
+window.addEventListener('DOMContentLoaded', async function() {
+  if (!requireAuth()) return;
+  // Show user email in nav
+  const session = getSession();
+  if (session && session.user) {
+    const el = document.getElementById('nav-user');
+    if (el) el.textContent = session.user.email;
+  }
+  try {
+    var rs = localStorage.getItem('hg_recipes');
+    var sp = localStorage.getItem('hg_spirits');
+    var ot = localStorage.getItem('hg_other');
+    var mn = localStorage.getItem('hg_menus');
+    if (sp) spirits = JSON.parse(sp);
+    if (ot) otherIngredients = JSON.parse(ot);
+    var allRecipes = rs ? JSON.parse(rs) : [];
+    var activeMenu = null;
+    if (mn) {
+      var menuArr = JSON.parse(mn);
+      activeMenu = menuArr.filter(function(m){return m.isActive;})[0] || menuArr[0] || null;
+    }
+    if (activeMenu) {
+      var ids = {};
+      (activeMenu.recipeIds || []).forEach(function(r){ ids[r.id] = true; });
+      recipes = allRecipes.filter(function(r){ return ids[r.id]; });
+      document.getElementById('menu-title').textContent = activeMenu.name || 'Menu Grid';
+    } else {
+      recipes = allRecipes.filter(function(r){ return r.recipeType !== 'barprep'; });
+    }
+    buildFilters();
+    buildColMenu();
+    applyFilters();
+    renderSummary();
+  } catch(e) {
+    console.error('Grid init error:', e);
+    document.getElementById('page-meta').textContent = 'Error loading data: ' + e.message;
+  }
+});
+
+function findIng(id) {
+  var s = spirits.filter(function(x){return x.id===id;})[0];
+  if (s) return s;
+  return otherIngredients.filter(function(x){return x.id===id;})[0] || null;
+}
+
+function calcCost(r) {
+  if (!r.ingredients || r.ingredients.length === 0) return null;
+  var total = 0, hasAny = false;
+  r.ingredients.forEach(function(ing) {
+    var rows = ing.isBatchGroup ? (ing.children || []) : [ing];
+    rows.forEach(function(row) {
+      if (!row.ingredientId || NEGLIGIBLE.indexOf(row.unit) > -1) return;
+      var found = findIng(row.ingredientId);
+      if (!found || !found.costPerOz) return;
+      var qty = parseFloat(row.qty) || 0;
+      var oz = row.unit === 'ml' ? qty / 29.5735 : qty;
+      total += oz * found.costPerOz;
+      hasAny = true;
+    });
+  });
+  return hasAny ? total : null;
+}
+
+function calcPC(r) {
+  var cost = calcCost(r);
+  if (cost === null || !r.menuPrice) return null;
+  return (cost / r.menuPrice) * 100;
+}
+
+function pcClass(pct) {
+  if (pct === null) return 'unknown';
+  if (pct <= COGS_TARGET) return 'ok';
+  if (pct <= COGS_TARGET * 1.25) return 'warn';
+  return 'bad';
+}
+
+function getSpirit(r) {
+  if (!r.ingredients) return '';
+  var spirits_list = ['Bourbon','Rye','Scotch','Gin','Vodka','Rum','Tequila','Mezcal','Brandy','Whiskey'];
+  var result = '';
+  r.ingredients.forEach(function(ing) {
+    var rows = ing.isBatchGroup ? (ing.children||[]) : [ing];
+    rows.forEach(function(row) {
+      if (result) return;
+      if (!row.ingredientId) return;
+      var found = findIng(row.ingredientId);
+      if (found && spirits_list.indexOf(found.subcategory) > -1) result = found.subcategory;
+    });
+  });
+  return result;
+}
+
+function isBatched(r) {
+  return r.ingredients && r.ingredients.some(function(i){return i.isBatchGroup;});
+}
+
+function esc(str) {
+  return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderSummary() {
+  var total = recipes.length;
+  var priced = recipes.filter(function(r){return calcPC(r)!==null;});
+  var avgPc = priced.length > 0 ? priced.reduce(function(s,r){return s+calcPC(r);},0) / priced.length : null;
+  var over = priced.filter(function(r){return calcPC(r)>COGS_TARGET;}).length;
+  var unpriced = recipes.filter(function(r){return calcPC(r)===null;}).length;
+  var withPrice = recipes.filter(function(r){return r.menuPrice;});
+  var avgPrice = withPrice.length > 0 ? withPrice.reduce(function(s,r){return s+r.menuPrice;},0)/withPrice.length : null;
+  document.getElementById('sc-total').textContent = total;
+  var avgEl = document.getElementById('sc-avg');
+  avgEl.textContent = avgPc !== null ? avgPc.toFixed(1)+'%' : '—';
+  avgEl.className = 'sc-val ' + (avgPc !== null ? (avgPc<=COGS_TARGET?'ok':avgPc<=COGS_TARGET*1.25?'warn':'bad') : '');
+  document.getElementById('sc-over').textContent = over;
+  document.getElementById('sc-over-sub').textContent = 'of ' + priced.length + ' priced';
+  document.getElementById('sc-unpriced').textContent = unpriced;
+  document.getElementById('sc-price').textContent = avgPrice !== null ? '$'+avgPrice.toFixed(2) : '—';
+  var parts = [total + ' cocktail' + (total!==1?'s':'')];
+  if (avgPc !== null) parts.push('Avg COGS: ' + avgPc.toFixed(1) + '%');
+  if (unpriced > 0) parts.push(unpriced + ' unpriced');
+  document.getElementById('page-meta').textContent = parts.join(' · ');
+}
+
+function buildFilters() {
+  var families = {};
+  var sps = {};
+  recipes.forEach(function(r){
+    if (r.family) families[r.family] = true;
+    var s = getSpirit(r);
+    if (s) sps[s] = true;
+  });
+  var fSel = document.getElementById('f-family');
+  fSel.innerHTML = '<option value="">All families</option>';
+  Object.keys(families).sort().forEach(function(f){
+    fSel.innerHTML += '<option value="'+esc(f)+'">'+esc(f)+'</option>';
+  });
+  var sSel = document.getElementById('f-spirit');
+  sSel.innerHTML = '<option value="">All spirits</option>';
+  Object.keys(sps).sort().forEach(function(s){
+    sSel.innerHTML += '<option value="'+esc(s)+'">'+esc(s)+'</option>';
+  });
+}
+
+function applyFilters() {
+  var q = document.getElementById('search-input').value.toLowerCase();
+  var fStyle = document.getElementById('f-style').value;
+  var fFamily = document.getElementById('f-family').value;
+  var fSpirit = document.getElementById('f-spirit').value;
+  var fCost = document.getElementById('f-cost').value;
+  filtered = recipes.filter(function(r) {
+    if (q && (r.name||'').toLowerCase().indexOf(q) === -1 &&
+              (r.bartender||'').toLowerCase().indexOf(q) === -1 &&
+              (r.summary||'').toLowerCase().indexOf(q) === -1) return false;
+    if (fStyle && r.style !== fStyle) return false;
+    if (fFamily && r.family !== fFamily) return false;
+    if (fSpirit && getSpirit(r) !== fSpirit) return false;
+    if (fCost) {
+      var cls = pcClass(calcPC(r));
+      if (fCost === 'unknown' && cls !== 'unknown') return false;
+      if (fCost !== 'unknown' && cls !== fCost) return false;
+    }
+    return true;
+  });
+  filtered.sort(function(a,b) {
+    var av, bv;
+    if (sortCol==='name'){av=(a.name||'').toLowerCase();bv=(b.name||'').toLowerCase();}
+    else if (sortCol==='price'){av=a.menuPrice||0;bv=b.menuPrice||0;}
+    else if (sortCol==='pourCost'){av=calcPC(a)!=null?calcPC(a):999;bv=calcPC(b)!=null?calcPC(b):999;}
+    else if (sortCol==='style'){av=(a.style||'').toLowerCase();bv=(b.style||'').toLowerCase();}
+    else if (sortCol==='family'){av=(a.family||'').toLowerCase();bv=(b.family||'').toLowerCase();}
+    else if (sortCol==='glass'){av=(a.glass||'').toLowerCase();bv=(b.glass||'').toLowerCase();}
+    else if (sortCol==='ice'){av=(a.ice||'').toLowerCase();bv=(b.ice||'').toLowerCase();}
+    else{av=(a.name||'').toLowerCase();bv=(b.name||'').toLowerCase();}
+    if (av<bv) return sortDir==='asc'?-1:1;
+    if (av>bv) return sortDir==='asc'?1:-1;
+    return 0;
+  });
+  currentPage = 1;
+  renderTable();
+}
+
+function setSort(col) {
+  if (sortCol===col) sortDir = sortDir==='asc'?'desc':'asc';
+  else { sortCol=col; sortDir='asc'; }
+  applyFilters();
+}
+
+function buildColMenu() {
+  var menu = document.getElementById('col-menu');
+  menu.innerHTML = COLS.filter(function(c){return c.key&&c.key!=='actions';}).map(function(col,i){
+    return '<div class="col-item" onclick="toggleCol(\''+col.key+'\')">'+
+      '<div class="col-check '+(col.on?'on':'')+'">'+(col.on?'✓':'')+'</div>'+
+      '<span>'+col.label+'</span></div>';
+  }).join('');
+}
+
+function toggleCol(key) {
+  COLS.forEach(function(c){if(c.key===key) c.on=!c.on;});
+  buildColMenu();
+  renderTable();
+}
+
+function toggleColMenu() {
+  document.getElementById('col-menu').classList.toggle('open');
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.col-toggle-wrap')) {
+    var m = document.getElementById('col-menu');
+    if (m) m.classList.remove('open');
+  }
+});
+
+function renderTable() {
+  var visCols = COLS.filter(function(c){return c.on;});
+  var head = document.getElementById('grid-head');
+  var body = document.getElementById('grid-body');
+  var total = filtered.length;
+  var start = (currentPage-1)*PAGE_SIZE;
+  var slice = filtered.slice(start, start+PAGE_SIZE);
+
+  // Header
+  head.innerHTML = '<tr>' + visCols.map(function(col) {
+    if (!col.key || col.key==='actions') return '<th style="width:40px;"></th>';
+    var sorted = sortCol===col.key;
+    var arrow = sorted ? (sortDir==='asc'?' ↑':' ↓') : ' ↕';
+    return '<th class="'+(sorted?'sorted':'')+'" onclick="setSort(\''+col.key+'\')">'+col.label+'<span style="opacity:0.4;font-size:9px;">'+arrow+'</span></th>';
+  }).join('') + '</tr>';
+
+  // Empty state
+  if (slice.length === 0) {
+    body.innerHTML = '<tr><td colspan="'+visCols.length+'">' +
+      '<div class="empty-state">' +
+      '<div class="empty-icon"><i class="ti ti-glass-full"></i></div>' +
+      '<div class="empty-title">'+(recipes.length===0?'No recipes on this menu':'No results')+'</div>' +
+      '<div style="font-size:13px;color:var(--ink-light);">'+(recipes.length===0?'Add cocktails in Menu Manager.':'Try adjusting your filters.')+'</div>' +
+      '</div></td></tr>';
+    document.getElementById('table-info').textContent = 'No results';
+    document.getElementById('page-controls').innerHTML = '';
+    return;
+  }
+
+  // Rows
+  var rows = '';
+  slice.forEach(function(r) {
+    var pc = calcPC(r);
+    var cls = pcClass(pc);
+    var spirit = getSpirit(r);
+    var batched = isBatched(r);
+    var cells = '';
+    visCols.forEach(function(col) {
+      if (col.key==='name') {
+        var bBadge = batched ? '<span class="batch-badge"><i class="ti ti-stack-2" style="font-size:9px;"></i> batch</span>' : '';
+        cells += '<td><div style="display:flex;align-items:center;gap:8px;">' +
+          '<div class="thumb"><i class="ti ti-glass" style="font-size:13px;color:var(--ink-ghost);"></i></div>' +
+          '<div><div class="drink-name">'+esc(r.name||'Untitled')+'</div>'+bBadge+'</div></div></td>';
+      } else if (col.key==='price') {
+        cells += '<td><span class="price-val">'+(r.menuPrice?'$'+r.menuPrice.toFixed(2):'—')+'</span></td>';
+      } else if (col.key==='pourCost') {
+        cells += '<td><span class="pc-'+cls+'">'+(pc!==null?pc.toFixed(1)+'%':'—')+'</span></td>';
+      } else if (col.key==='style') {
+        cells += '<td>'+(r.style?'<span class="badge b-'+(r.style||'').toLowerCase()+'">'+esc(r.style)+'</span>':'—')+'</td>';
+      } else if (col.key==='family') {
+        cells += '<td><span class="family-val">'+esc(r.family||'—')+'</span></td>';
+      } else if (col.key==='bartender') {
+        cells += '<td style="font-size:12px;color:var(--ink-mid);">'+esc(r.bartender||'—')+'</td>';
+      } else if (col.key==='summary') {
+        cells += '<td><div class="summary-text">'+esc(r.summary||'—')+'</div></td>';
+      } else if (col.key==='spirit') {
+        cells += '<td>'+(spirit?'<span class="badge b-spirit">'+esc(spirit)+'</span>':'—')+'</td>';
+      } else if (col.key==='garnish') {
+        cells += '<td style="font-size:12px;color:var(--ink-mid);">'+esc(r.garnish||'—')+'</td>';
+      } else if (col.key==='glass') {
+        cells += '<td style="font-size:12px;color:var(--ink-mid);">'+esc(r.glass||'—')+'</td>';
+      } else if (col.key==='ice') {
+        cells += '<td style="font-size:12px;color:var(--ink-mid);">'+esc(r.ice||'—')+'</td>';
+      } else if (col.key==='actions') {
+        cells += '<td onclick="event.stopPropagation()"><a href="hamlet-ghost-recipes.html" onclick="localStorage.setItem(\'hg_edit_recipe\',\''+r.id+'\')" class="icon-btn"><i class="ti ti-pencil"></i></a></td>';
+      } else {
+        cells += '<td>—</td>';
+      }
+    });
+    rows += '<tr onclick="goToRecipe(\''+r.id+'\')">'+cells+'</tr>';
+  });
+  body.innerHTML = rows;
+
+  // Footer
+  document.getElementById('table-info').textContent = 'Showing '+(start+1)+'–'+Math.min(start+PAGE_SIZE,total)+' of '+total+' cocktails · Click row to edit';
+  renderPagination(total);
+}
+
+function renderPagination(total) {
+  var totalPages = Math.ceil(total/PAGE_SIZE);
+  var ctrl = document.getElementById('page-controls');
+  if (totalPages <= 1) { ctrl.innerHTML=''; return; }
+  var html = '<button class="page-btn" '+(currentPage===1?'disabled':'')+' onclick="goPage('+(currentPage-1)+')">&#8249;</button>';
+  for (var i=1;i<=totalPages;i++) {
+    html += '<button class="page-btn '+(i===currentPage?'active':'')+'" onclick="goPage('+i+')">'+i+'</button>';
+  }
+  html += '<button class="page-btn" '+(currentPage===totalPages?'disabled':'')+' onclick="goPage('+(currentPage+1)+')">&#8250;</button>';
+  ctrl.innerHTML = html;
+}
+
+function goPage(p) { currentPage=p; renderTable(); }
+
+function goToRecipe(id) {
+  localStorage.setItem('hg_edit_recipe', id);
+  window.location.href = 'hamlet-ghost-recipes.html';
+}
+
+function exportCSV() {
+  var headers = ['Name','Bartender','Style','Family','Base Spirit','Glass','Ice','Garnish','Menu Price','Pour Cost %','Ingredient Summary'];
+  var rows = recipes.map(function(r) {
+    var pc = calcPC(r);
+    return [
+      r.name||'',r.bartender||'',r.style||'',r.family||'',
+      getSpirit(r),r.glass||'',r.ice||'',r.garnish||'',
+      r.menuPrice?'$'+r.menuPrice.toFixed(2):'',
+      pc!==null?pc.toFixed(1)+'%':'',
+      r.summary||''
+    ].map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';});
+  });
+  var csv = [headers].concat(rows).map(function(r){return r.join(',');}).join('\n');
+  var blob = new Blob([csv],{type:'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href=url;a.download='hamlet-ghost-menu.csv';a.click();
+  URL.revokeObjectURL(url);
+  showToast('Menu exported as CSV');
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},2800);
+}
+</script>
+</body>
+</html>
