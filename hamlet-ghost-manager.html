@@ -514,7 +514,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const el = document.getElementById('nav-user');
     if (el) el.textContent = session.user.email;
   }
-  load();
+  await loadManager();
   renderMenusList();
   // Auto-select active menu
   const active = menus.find(m => m.isActive);
