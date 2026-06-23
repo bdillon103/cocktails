@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hamlet & Ghost — Costing Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1812; --ink-mid: #4a4640; --ink-light: #8a8680; --ink-ghost: #c8c4bc;
+    --parchment: #f5f2ec; --parchment-dark: #ede9e0; --parchment-mid: #e8e4db;
+    --accent: #c8392b; --accent-dim: #f5e8e6;
+    --gold: #b8860b; --gold-dim: #f0e8d0;
+    --green: #2d6a4f; --green-dim: #d8ecd4;
+    --blue: #1a4a7a; --blue-dim: #dce8f5;
+    --border: rgba(26,24,18,0.1); --border-mid: rgba(26,24,18,0.2);
+    --radius: 6px; --radius-lg: 10px;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+    --bar-h: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--parchment); color: var(--ink); font-family: var(--sans); font-size: 14px; min-height: 100vh; }
+
+  .nav { background: var(--ink); padding: 0 2rem; display: flex; align-items: center; height: 52px; border-bottom: 2px solid var(--accent); }
+  .nav-brand { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--parchment); letter-spacing: 0.08em; text-transform: uppercase; margin-right: 2rem; white-space: nowrap; }
+  .nav-brand span { color: var(--accent); }
+  .nav-links { display: flex; flex: 1; }
+  .nav-link { font-family: var(--mono); font-size: 11px; color: var(--ink-ghost); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 1rem; height: 52px; display: flex; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; white-space: nowrap; text-decoration: none; }
+  .nav-link:hover { color: var(--parchment); }
+  .nav-link.active { color: var(--parchment); border-bottom-color: var(--accent); }
+
+  .page { max-width: 1300px; margin: 0 auto; padding: 1.5rem 2rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem; }
+  .page-title { font-family: var(--mono); font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+  .page-sub { font-size: 13px; color: var(--ink-light); margin-top: 3px; }
+
+  /* CARDS */
+  .card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+  .card-title { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+  .card-title-expand { cursor: pointer; user-select: none; }
+  .card-title-expand:hover { color: var(--ink); }
+
+  /* STAT CARDS */
+  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .stat-card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+  .sc-label { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); margin-bottom: 6px; }
+  .sc-val { font-size: 22px; font-weight: 500; font-family: var(--mono); line-height: 1.2; }
+  .sc-sub { font-size: 11px; color: var(--ink-light); margin-top: 3px; }
+  .sc-delta { font-size: 11px; margin-top: 3px; display: flex; align-items: center; gap: 3px; }
+  .ok { color: var(--green); } .warn { color: var(--gold); } .bad { color: var(--accent); }
+
+  /* GRIDS */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .four-col { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+
+  /* COGS SLIDER */
+  .slider-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .slider-label { font-size: 12px; color: var(--ink-light); min-width: 80px; }
+  input[type=range] { flex: 1; accent-color: var(--ink); }
+  .slider-val { font-family: var(--mono); font-size: 13px; font-weight: 500; min-width: 36px; text-align: right; }
+
+  /* BAR CHARTS */
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bar-label { font-size: 11px; color: var(--ink-mid); text-align: right; flex-shrink: 0; }
+  .bar-track { flex: 1; height: var(--bar-h); background: var(--parchment-dark); border-radius: 5px; overflow: hidden; }
+  .bar-fill { height: var(--bar-h); border-radius: 5px; transition: width 0.4s ease; }
+  .bar-count { font-family: var(--mono); font-size: 11px; color: var(--ink-mid); min-width: 16px; text-align: right; flex-shrink: 0; }
+
+  /* POUR COST BARS */
+  .pc-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .pc-bar-name { font-size: 12px; color: var(--ink-mid); min-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .pc-bar-track { flex: 1; height: 10px; background: var(--parchment-dark); border-radius: 5px; overflow: hidden; position: relative; }
+  .pc-bar-fill { height: 10px; border-radius: 5px; transition: width 0.4s; }
+  .pc-bar-val { font-family: var(--mono); font-size: 11px; font-weight: 500; min-width: 42px; text-align: right; flex-shrink: 0; }
+  .target-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: 0.3; }
+
+  /* PROBLEM ROWS */
+  .problem-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; gap: 8px; }
+  .problem-row:last-child { border-bottom: none; }
+  .pr-name { font-weight: 500; flex: 1; min-width: 0; }
+  .pr-meta { font-size: 11px; color: var(--ink-light); margin-top: 1px; }
+
+  /* SALES TABLE */
+  .sales-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .sales-row:last-child { border-bottom: none; }
+  .sales-name { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sales-pc { font-family: var(--mono); font-size: 11px; font-weight: 500; min-width: 40px; text-align: right; }
+  .sales-input { width: 64px; height: 28px; border: 1px solid var(--border-mid); border-radius: var(--radius); font-size: 12px; font-family: var(--mono); text-align: center; background: white; color: var(--ink); outline: none; padding: 0 6px; }
+  .sales-input:focus { border-color: var(--ink-mid); }
+  .true-cogs-banner { background: var(--parchment); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+
+  /* ING COST */
+  .ing-cost-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .ing-cost-row:last-child { border-bottom: none; }
+  .ing-cost-name { flex: 1; font-weight: 500; }
+  .ing-cost-bar { flex: 1; height: 6px; background: var(--parchment-dark); border-radius: 3px; overflow: hidden; }
+  .ing-cost-fill { height: 6px; border-radius: 3px; background: var(--accent); }
+  .ing-cost-val { font-family: var(--mono); font-size: 11px; color: var(--ink-light); min-width: 120px; text-align: right; }
+
+  /* BUTTONS */
+  .btn { height: 30px; border: 1px solid var(--border-mid); border-radius: var(--radius); padding: 0 12px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; background: var(--parchment); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; white-space: nowrap; text-decoration: none; }
+  .btn:hover { background: var(--parchment-mid); }
+  .btn-primary { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
+  .btn-sm { height: 26px; font-size: 10px; padding: 0 8px; }
+
+  /* EXPAND TOGGLE */
+  .expandable-body { overflow: hidden; transition: max-height 0.3s ease; }
+  .expandable-body.collapsed { max-height: 220px; }
+  .expandable-body.expanded { max-height: 2000px; }
+  .expand-btn { font-family: var(--mono); font-size: 10px; color: var(--ink-light); cursor: pointer; display: flex; align-items: center; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .expand-btn:hover { color: var(--ink); }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+  .empty-note { text-align: center; padding: 2rem; color: var(--ink-light); font-size: 13px; }
+  .suggested-price { display: inline-flex; align-items: center; gap: 4px; background: var(--ink); color: var(--parchment); padding: 3px 10px; border-radius: var(--radius); font-family: var(--mono); font-size: 11px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .suggested-price:hover { background: var(--ink-mid); }
+
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--ink); color: var(--parchment); padding: 10px 16px; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; border-left: 3px solid var(--accent); opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; z-index: 200; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .no-menu { text-align: center; padding: 5rem 2rem; color: var(--ink-light); }
+  .no-menu-icon { font-size: 48px; opacity: 0.15; margin-bottom: 1rem; }
+  .no-menu-title { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--ink-mid); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">Hamlet <span>&</span> Ghost</div>
+  <div class="nav-links">
+    <a class="nav-link " href="hamlet-ghost-ingredients.html">Ingredients</a>
+    <a class="nav-link " href="hamlet-ghost-recipes.html">Recipes</a>
+    <a class="nav-link " href="hamlet-ghost-grid.html">Menu Grid</a>
+    <a class="nav-link " href="hamlet-ghost-manager.html">Menu Manager</a>
+    <a class="nav-link active" href="hamlet-ghost-dashboard.html">Dashboard</a>
+    <a class="nav-link " href="hamlet-ghost-specsheet.html">Spec Sheet</a>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+    <span id="nav-user" style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(200,196,188,0.6);letter-spacing:0.04em;"></span>
+    <button onclick="signOut()" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(200,196,188,0.7);padding:0 12px;height:28px;border-radius:4px;cursor:pointer;">Sign out</button>
+  </div>
+</div>
+</nav>
+
+<main class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title" id="dash-title">Costing Dashboard</div>
+      <div class="page-sub" id="dash-sub">Loading...</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span style="font-size:12px;color:var(--ink-light);font-family:var(--mono);">Compare to:</span>
+      <select id="compare-select" style="height:30px;border:1px solid var(--border-mid);border-radius:var(--radius);padding:0 24px 0 10px;font-family:var(--mono);font-size:11px;background:white;color:var(--ink);outline:none;appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a8680' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 8px center;" onchange="renderAll()">
+        <option value="">No comparison</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="main-content"></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://qgfrzhvgrilgxygoxjcn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Eq6r-RQzxU13f2A1sf3vHw_VoXb9tav';
+const LS_KEY = 'hg_app_data_v1';
+
+// ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
+async function sbRequest(method, path, body) {
+  const session = getSession();
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`
+  };
+  const res = await fetch(SUPABASE_URL + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+  return res.json().catch(() => null);
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function getSession() {
+  const raw = localStorage.getItem('hg_session');
+  if (!raw) return null;
+  try {
+    const session = JSON.parse(raw);
+    // Check if expired
+    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
+      localStorage.removeItem('hg_session');
+      return null;
+    }
+    return session;
+  } catch(e) { return null; }
+}
+
+async function signIn(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign in failed');
+  localStorage.setItem('hg_session', JSON.stringify(data));
+  return data;
+}
+
+async function signOut() {
+  const session = getSession();
+  if (session) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${session.access_token}` }
+    }).catch(() => {});
+  }
+  localStorage.removeItem('hg_session');
+  showLoginScreen();
+}
+
+function requireAuth() {
+  const session = getSession();
+  if (!session) {
+    showLoginScreen();
+    return false;
+  }
+  return true;
+}
+
+// ─── DATA LAYER ───────────────────────────────────────────────────────────────
+async function loadAppData() {
+  // Try Supabase first
+  try {
+    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+    if (rows && rows.length > 0 && rows[0].data) {
+      const data = rows[0].data;
+      // Update local cache
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+      return data;
+    }
+  } catch(e) {
+    console.warn('Supabase load failed, using local cache:', e.message);
+  }
+  // Fallback to localStorage cache
+  const cached = localStorage.getItem(LS_KEY);
+  if (cached) return JSON.parse(cached);
+  // Last resort: try old localStorage keys for migration
+  return migrateFromOldKeys();
+}
+
+async function saveAppData(data) {
+  // Always update local cache immediately
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+  // Save to Supabase
+  try {
+    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  } catch(e) {
+    console.warn('Supabase save failed, data cached locally:', e.message);
+  }
+}
+
+function migrateFromOldKeys() {
+  // Migrate from old separate localStorage keys
+  const spirits = localStorage.getItem('hg_spirits');
+  const other = localStorage.getItem('hg_other');
+  const recipes = localStorage.getItem('hg_recipes');
+  const menus = localStorage.getItem('hg_menus');
+  const importMeta = localStorage.getItem('hg_import_meta');
+  const salesData = localStorage.getItem('hg_sales_data');
+  
+  if (spirits || other || recipes || menus) {
+    const migrated = {
+      spirits: spirits ? JSON.parse(spirits) : [],
+      otherIngredients: other ? JSON.parse(other) : [],
+      recipes: recipes ? JSON.parse(recipes) : [],
+      menus: menus ? JSON.parse(menus) : [],
+      importMeta: importMeta ? JSON.parse(importMeta) : null,
+      salesData: salesData ? JSON.parse(salesData) : {}
+    };
+    console.log('Migrated data from old localStorage keys');
+    return migrated;
+  }
+  return { spirits: [], otherIngredients: [], recipes: [], menus: [], importMeta: null, salesData: {} };
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:#f5f2ec;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;">
+      <div style="background:white;border:1px solid rgba(26,24,18,0.1);border-radius:12px;padding:2.5rem;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <div style="text-align:center;margin-bottom:2rem;">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#1a1812;margin-bottom:4px;">Hamlet <span style="color:#c8392b;">&</span> Ghost</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#8a8680;">Cocktail Manager</div>
+        </div>
+        <div id="login-error" style="display:none;background:#f5e8e6;color:#c8392b;padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:1rem;"></div>
+        <div style="margin-bottom:12px;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Email</label>
+          <input type="email" id="login-email" placeholder="your@email.com" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:1.5rem;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button onclick="doLogin()" id="login-btn" style="width:100%;height:40px;background:#1a1812;color:#f5f2ec;border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Sign in</button>
+      </div>
+    </div>`;
+  // Re-import fonts since we wiped body
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap';
+  document.head.appendChild(link);
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  if (!email || !password) {
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.textContent = 'Signing in...';
+  btn.disabled = true;
+  errEl.style.display = 'none';
+  try {
+    await signIn(email, password);
+    window.location.reload();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.textContent = 'Sign in';
+    btn.disabled = false;
+  }
+}
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let recipes = [];         // active menu recipes
+let allRecipes = [];      // all recipes
+let spirits = [];
+let otherIngredients = [];
+let menus = [];
+let activeMenu = null;
+let cogsTarget = 20;
+let salesData = {};       // { recipeId: count }
+let expandedSections = {};
+const NEGLIGIBLE = ['dash','barspoon','rinse'];
+const BAR_COLORS = ['#2d6a4f','#7f77dd','#ef9f27','#d85a30','#378add','#d4537e','#639922','#5a8fa8','#9b6a2d','#4a7a5a'];
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  if (!requireAuth()) return;
+  const session = getSession();
+  if (session && session.user) {
+    const el = document.getElementById('nav-user');
+    if (el) el.textContent = session.user.email;
+  }
+  await loadData();
+  populateCompare();
+  renderAll();
+});
+
+async function loadData() {
+  const data = await loadAppData();
+  spirits = data.spirits || [];
+  otherIngredients = data.otherIngredients || [];
+  allRecipes = data.recipes || [];
+  menus = data.menus || [];
+  salesData = data.salesData || {};
+  // Always read fresh from hg_menus
+  if (mn) {
+    try {
+      const menuArr = JSON.parse(mn);
+      activeMenu = menuArr.find(m => m.isActive) || menuArr[0] || null;
+    } catch(e) {}
+  }
+  if (activeMenu) {
+    const ids = new Set((activeMenu.recipeIds || []).map(r => r.id));
+    recipes = allRecipes.filter(r => ids.has(r.id));
+  } else {
+    recipes = allRecipes;
+  }
+}
+
+async function saveSalesData() {
+  const data = await loadAppData();
+  data.salesData = salesData;
+  await saveAppData(data);
+}
+
+// ─── COSTING ─────────────────────────────────────────────────────────────────
+function findIng(id) {
+  return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || null;
+}
+
+function calcCost(r) {
+  if (!r.ingredients || r.ingredients.length === 0) return null;
+  let total = 0, hasAny = false;
+  for (const ing of r.ingredients) {
+    const rows = ing.isBatchGroup ? (ing.children || []) : [ing];
+    for (const row of rows) {
+      if (!row.ingredientId || NEGLIGIBLE.includes(row.unit)) continue;
+      const found = findIng(row.ingredientId);
+      if (!found || !found.costPerOz) continue;
+      const qty = parseFloat(row.qty) || 0;
+      const oz = row.unit === 'ml' ? qty / 29.5735 : qty;
+      total += oz * found.costPerOz;
+      hasAny = true;
+    }
+  }
+  return hasAny ? total : null;
+}
+
+function calcPC(r) {
+  const cost = calcCost(r);
+  if (cost === null || !r.menuPrice) return null;
+  return (cost / r.menuPrice) * 100;
+}
+
+function pcColor(pct) {
+  if (pct === null) return 'var(--ink-ghost)';
+  if (pct <= cogsTarget) return 'var(--green)';
+  if (pct <= cogsTarget * 1.25) return 'var(--gold)';
+  return 'var(--accent)';
+}
+
+function pcClass(pct) {
+  if (pct === null) return 'cogs-unknown';
+  if (pct <= cogsTarget) return 'ok';
+  if (pct <= cogsTarget * 1.25) return 'warn';
+  return 'bad';
+}
+
+function calcTrueCOGS() {
+  let totalCost = 0, totalRevenue = 0, hasSales = false;
+  recipes.forEach(r => {
+    const sold = salesData[r.id] || 0;
+    if (sold === 0) return;
+    const cost = calcCost(r);
+    if (cost === null || !r.menuPrice) return;
+    totalCost += cost * sold;
+    totalRevenue += r.menuPrice * sold;
+    hasSales = true;
+  });
+  if (!hasSales || totalRevenue === 0) return null;
+  return (totalCost / totalRevenue) * 100;
+}
+
+function getBaseSpirit(r) {
+  if (!r.ingredients) return '';
+  for (const ing of r.ingredients) {
+    const rows = ing.isBatchGroup ? (ing.children || []) : [ing];
+    for (const row of rows) {
+      if (!row.ingredientId) continue;
+      const found = findIng(row.ingredientId);
+      if (found && ['Bourbon','Rye','Scotch','Gin','Vodka','Rum','Tequila','Mezcal','Brandy','Whiskey'].includes(found.subcategory)) {
+        return found.subcategory;
+      }
+    }
+  }
+  return 'Other';
+}
+
+// ─── COMPARE ─────────────────────────────────────────────────────────────────
+function populateCompare() {
+  const sel = document.getElementById('compare-select');
+  const inactive = menus.filter(m => !m.isActive);
+  sel.innerHTML = '<option value="">No comparison</option>' +
+    inactive.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+}
+
+function getCompareRecipes() {
+  const id = document.getElementById('compare-select').value;
+  if (!id) return null;
+  const m = menus.find(m => m.id === id);
+  if (!m) return null;
+  const ids = new Set((m.recipeIds || []).map(r => r.id));
+  return { menu: m, recipes: allRecipes.filter(r => ids.has(r.id)) };
+}
+
+function compareAvgPC(compareRecipes) {
+  const priced = compareRecipes.filter(r => calcPC(r) !== null);
+  if (!priced.length) return null;
+  return priced.reduce((s, r) => s + calcPC(r), 0) / priced.length;
+}
+
+// ─── RENDER ALL ───────────────────────────────────────────────────────────────
+function renderAll() {
+  const el = document.getElementById('main-content');
+  if (recipes.length === 0 && !activeMenu) {
+    el.innerHTML = `<div class="no-menu">
+      <div class="no-menu-icon"><i class="ti ti-chart-bar"></i></div>
+      <div class="no-menu-title">No active menu</div>
+      <div style="font-size:13px;margin-bottom:1.5rem;">Set a menu as active in Menu Manager to see dashboard data.</div>
+      <a href="hamlet-ghost-manager.html" class="btn btn-primary"><i class="ti ti-notebook"></i> Go to Menu Manager</a>
+    </div>`;
+    return;
+  }
+
+  const menuName = activeMenu?.name || 'All Recipes';
+  document.getElementById('dash-title').textContent = menuName;
+  document.getElementById('dash-sub').textContent = `${recipes.length} cocktails · COGS target: ${cogsTarget}%`;
+
+  const priced = recipes.filter(r => calcPC(r) !== null);
+  const avgPC = priced.length > 0 ? priced.reduce((s,r) => s + calcPC(r), 0) / priced.length : null;
+  const trueCOGS = calcTrueCOGS();
+  const over = priced.filter(r => calcPC(r) > cogsTarget).length;
+  const unpriced = recipes.filter(r => calcPC(r) === null).length;
+  const compare = getCompareRecipes();
+  const compareAvg = compare ? compareAvgPC(compare.recipes) : null;
+  const delta = avgPC !== null && compareAvg !== null ? avgPC - compareAvg : null;
+
+  el.innerHTML = `
+    ${renderStatCards(avgPC, trueCOGS, over, unpriced, delta, compare)}
+    ${renderCOGSSlider()}
+    ${renderTwoCol(
+      renderPourCostChart(priced),
+      renderProblemDrinks(priced)
+    )}
+    ${renderSalesVolume()}
+    ${renderExpensiveIngredients()}
+    ${renderFourCol()}
+    ${renderTwoCol(
+      renderBalanceChart('Cocktail Family', getFamilyData()),
+      renderBalanceChart('Flavor Profile', getFlavorData())
+    )}
+  `;
+}
+
+// ─── STAT CARDS ───────────────────────────────────────────────────────────────
+function renderStatCards(avgPC, trueCOGS, over, unpriced, delta, compare) {
+  const deltaHTML = delta !== null
+    ? `<div class="sc-delta ${delta < 0 ? 'ok' : 'bad'}">
+        <i class="ti ti-arrow-${delta < 0 ? 'down' : 'up'}" style="font-size:10px;"></i>
+        ${Math.abs(delta).toFixed(1)}% vs ${esc(compare.menu.name)}
+       </div>`
+    : `<div class="sc-sub">Target: ${cogsTarget}%</div>`;
+
+  return `<div class="stat-grid">
+    <div class="stat-card">
+      <div class="sc-label">Avg pour cost</div>
+      <div class="sc-val ${avgPC !== null ? pcClass(avgPC) : ''}">${avgPC !== null ? avgPC.toFixed(1)+'%' : '—'}</div>
+      ${deltaHTML}
+    </div>
+    <div class="stat-card">
+      <div class="sc-label">True COGS (sales-wtd)</div>
+      <div class="sc-val ${trueCOGS !== null ? pcClass(trueCOGS) : ''}">${trueCOGS !== null ? trueCOGS.toFixed(1)+'%' : '—'}</div>
+      <div class="sc-sub">${trueCOGS !== null ? 'Based on sales volume' : 'Enter sales volume below'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="sc-label">Over target</div>
+      <div class="sc-val ${over > 0 ? 'warn' : 'ok'}">${over}</div>
+      <div class="sc-sub">of ${recipes.filter(r => calcPC(r)!==null).length} priced drinks</div>
+    </div>
+    <div class="stat-card">
+      <div class="sc-label">Unpriced drinks</div>
+      <div class="sc-val ${unpriced > 0 ? 'bad' : 'ok'}">${unpriced}</div>
+      <div class="sc-sub">${unpriced > 0 ? 'Cost unknown' : 'All drinks costed ✓'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="sc-label">Total cocktails</div>
+      <div class="sc-val">${recipes.length}</div>
+      <div class="sc-sub">on active menu</div>
+    </div>
+  </div>`;
+}
+
+// ─── COGS SLIDER ─────────────────────────────────────────────────────────────
+function renderCOGSSlider() {
+  const priced = recipes.filter(r => calcPC(r) !== null);
+  const suggestions = priced.filter(r => calcPC(r) > cogsTarget).map(r => {
+    const cost = calcCost(r);
+    const suggested = cost !== null ? cost / (cogsTarget / 100) : null;
+    return { r, suggested };
+  }).filter(s => s.suggested !== null);
+
+  return `<div class="card" style="margin-bottom:1rem;">
+    <div class="card-title">Global COGS target</div>
+    <div class="slider-wrap">
+      <span class="slider-label">Target %</span>
+      <input type="range" min="10" max="35" step="0.5" value="${cogsTarget}" oninput="cogsTarget=parseFloat(this.value);document.getElementById('cogs-val').textContent=cogsTarget+'%';renderAll()">
+      <span class="slider-val" id="cogs-val">${cogsTarget}%</span>
+    </div>
+    <div style="font-size:12px;color:var(--ink-light);margin-bottom:${suggestions.length>0?'1rem':'0'};">Adjusting this recalculates status across all drinks and updates suggested prices.</div>
+    ${suggestions.length > 0 ? `
+    <div style="padding-top:1rem;border-top:1px solid var(--border);">
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-light);margin-bottom:10px;">Suggested prices to hit ${cogsTarget}%</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        ${suggestions.map(s => `
+          <div style="font-size:13px;display:flex;align-items:center;gap:8px;">
+            <span style="color:var(--ink-light);">${esc(s.r.name||'Untitled')}</span>
+            <span class="suggested-price" onclick="applyPrice('${s.r.id}',${s.suggested.toFixed(2)})">
+              $${s.suggested.toFixed(2)} →
+            </span>
+            <span style="font-size:11px;color:var(--ink-ghost);">currently $${s.r.menuPrice?.toFixed(2)||'—'}</span>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+async function applyPrice(id, price) {
+  const r = allRecipes.find(r => r.id === id);
+  if (!r) return;
+  r.menuPrice = parseFloat(price);
+  const apData = await loadAppData();
+  apData.recipes = allRecipes;
+  await saveAppData(apData);
+  await loadData();
+  renderAll();
+  showToast(`✓ ${r.name} price updated to $${price}`);
+}
+
+// ─── POUR COST CHART ─────────────────────────────────────────────────────────
+function renderPourCostChart(priced) {
+  const sorted = [...recipes].sort((a,b) => (calcPC(a)??999) - (calcPC(b)??999));
+  const show = expandedSections.pourCost ? sorted : sorted.slice(0, 8);
+  const maxPC = Math.max(...sorted.map(r => calcPC(r)||0), cogsTarget * 1.5);
+  const targetPct = Math.min((cogsTarget / maxPC) * 100, 100);
+
+  return `<div class="card">
+    <div class="card-title card-title-expand" onclick="toggleSection('pourCost')">
+      Pour cost by drink
+      <i class="ti ti-chevron-${expandedSections.pourCost ? 'up' : 'down'}" style="font-size:12px;"></i>
+    </div>
+    <div class="expandable-body ${expandedSections.pourCost ? 'expanded' : 'collapsed'}">
+      ${show.map(r => {
+        const pc = calcPC(r);
+        const pct = pc !== null ? Math.min((pc / maxPC) * 100, 100) : 8;
+        const color = pc !== null
+          ? pc <= cogsTarget ? '#2d6a4f' : pc <= cogsTarget*1.25 ? '#b8860b' : '#c8392b'
+          : '#c8c4bc';
+        return `<div class="pc-bar-row">
+          <span class="pc-bar-name">${esc(r.name||'Untitled')}</span>
+          <div class="pc-bar-track">
+            <div class="pc-bar-fill" style="width:${pct}%;background:${color};"></div>
+            <div class="target-line" style="left:${targetPct}%;"></div>
+          </div>
+          <span class="pc-bar-val" style="color:${color};">${pc!==null ? pc.toFixed(1)+'%' : '—'}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    ${sorted.length > 8 ? `<div class="expand-btn" onclick="toggleSection('pourCost')">
+      <i class="ti ti-chevron-${expandedSections.pourCost?'up':'down'}" style="font-size:11px;"></i>
+      ${expandedSections.pourCost ? 'Show less' : `Show all ${sorted.length} drinks`}
+    </div>` : ''}
+  </div>`;
+}
+
+// ─── PROBLEM DRINKS ───────────────────────────────────────────────────────────
+function renderProblemDrinks(priced) {
+  const problems = recipes.filter(r => {
+    const pc = calcPC(r);
+    return pc === null || pc > cogsTarget;
+  }).sort((a,b) => (calcPC(b)??999) - (calcPC(a)??999));
+  const show = expandedSections.problems ? problems : problems.slice(0, 5);
+
+  return `<div class="card">
+    <div class="card-title card-title-expand" onclick="toggleSection('problems')">
+      Problem drinks
+      <i class="ti ti-chevron-${expandedSections.problems?'up':'down'}" style="font-size:12px;"></i>
+    </div>
+    ${problems.length === 0
+      ? `<div class="empty-note" style="padding:1.5rem;">All drinks are within target. 🎉</div>`
+      : show.map(r => {
+          const pc = calcPC(r);
+          const cost = calcCost(r);
+          const suggested = cost !== null ? cost / (cogsTarget / 100) : null;
+          return `<div class="problem-row">
+            <div style="flex:1;min-width:0;">
+              <div class="pr-name">${esc(r.name||'Untitled')} <span style="color:${pcColor(pc)};font-family:var(--mono);font-size:12px;">${pc!==null?pc.toFixed(1)+'%':'unpriced'}</span></div>
+              <div class="pr-meta">${pc!==null ? `Raise to $${suggested?.toFixed(2)||'?'} to hit ${cogsTarget}% · currently $${r.menuPrice?.toFixed(2)||'—'}` : 'Missing ingredient prices'}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0;">
+              <a href="hamlet-ghost-recipes.html" onclick="localStorage.setItem('hg_edit_recipe','${r.id}')" class="btn btn-sm">Edit</a>
+              ${suggested ? `<span class="suggested-price btn-sm" onclick="applyPrice('${r.id}',${suggested.toFixed(2)})">$${suggested.toFixed(2)} →</span>` : ''}
+            </div>
+          </div>`;
+        }).join('')
+    }
+    ${problems.length > 5 ? `<div class="expand-btn" onclick="toggleSection('problems')">
+      <i class="ti ti-chevron-${expandedSections.problems?'up':'down'}" style="font-size:11px;"></i>
+      ${expandedSections.problems ? 'Show less' : `Show all ${problems.length}`}
+    </div>` : ''}
+  </div>`;
+}
+
+// ─── SALES VOLUME ────────────────────────────────────────────────────────────
+function renderSalesVolume() {
+  const trueCOGS = calcTrueCOGS();
+  const show = expandedSections.sales ? recipes : recipes.slice(0, 6);
+
+  return `<div class="card" style="margin-bottom:1rem;">
+    <div class="card-title card-title-expand" onclick="toggleSection('sales')">
+      4-week sales volume
+      <span style="font-size:10px;font-weight:400;color:var(--ink-light);text-transform:none;letter-spacing:0;">enter total sold per drink</span>
+      <i class="ti ti-chevron-${expandedSections.sales?'up':'down'}" style="font-size:12px;"></i>
+    </div>
+    <div class="true-cogs-banner">
+      <div>
+        <div style="font-size:12px;font-weight:500;">True weighted COGS</div>
+        <div style="font-size:11px;color:var(--ink-light);margin-top:2px;">Sales-weighted average vs simple average</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:var(--mono);font-size:18px;font-weight:500;color:${trueCOGS!==null?pcColor(trueCOGS):'var(--ink-ghost)'};">${trueCOGS!==null?trueCOGS.toFixed(1)+'%':'—'}</div>
+        ${calcSimpleAvgPC() !== null ? `<div style="font-size:11px;color:var(--ink-light);">vs ${calcSimpleAvgPC().toFixed(1)}% simple avg</div>` : ''}
+      </div>
+    </div>
+    <div class="expandable-body ${expandedSections.sales?'expanded':'collapsed'}">
+      ${show.map(r => {
+        const pc = calcPC(r);
+        return `<div class="sales-row">
+          <span class="sales-name">${esc(r.name||'Untitled')}</span>
+          <span class="sales-pc" style="color:${pcColor(pc)};">${pc!==null?pc.toFixed(1)+'%':'—'}</span>
+          <input type="number" class="sales-input" placeholder="0" min="0"
+            value="${salesData[r.id]||''}"
+            oninput="salesData['${r.id}']=parseInt(this.value)||0;saveSalesData().then(()=>renderAll())">
+          <span style="font-size:11px;color:var(--ink-light);">total sold</span>
+        </div>`;
+      }).join('')}
+    </div>
+    ${recipes.length > 6 ? `<div class="expand-btn" onclick="toggleSection('sales')">
+      <i class="ti ti-chevron-${expandedSections.sales?'up':'down'}" style="font-size:11px;"></i>
+      ${expandedSections.sales ? 'Show less' : `Show all ${recipes.length} drinks`}
+    </div>` : ''}
+  </div>`;
+}
+
+function calcSimpleAvgPC() {
+  const priced = recipes.filter(r => calcPC(r) !== null);
+  if (!priced.length) return null;
+  return priced.reduce((s,r) => s + calcPC(r), 0) / priced.length;
+}
+
+// ─── EXPENSIVE INGREDIENTS ───────────────────────────────────────────────────
+function renderExpensiveIngredients() {
+  const ingUsage = {};
+  recipes.forEach(r => {
+    (r.ingredients || []).forEach(ing => {
+      const rows = ing.isBatchGroup ? (ing.children||[]) : [ing];
+      rows.forEach(row => {
+        if (!row.ingredientId || NEGLIGIBLE.includes(row.unit)) return;
+        const found = findIng(row.ingredientId);
+        if (!found || !found.costPerOz) return;
+        if (!ingUsage[row.ingredientId]) ingUsage[row.ingredientId] = { found, count: 0, totalCost: 0 };
+        ingUsage[row.ingredientId].count++;
+        const qty = parseFloat(row.qty) || 0;
+        const oz = row.unit === 'ml' ? qty / 29.5735 : qty;
+        ingUsage[row.ingredientId].totalCost += oz * found.costPerOz;
+      });
+    });
+  });
+
+  const sorted = Object.values(ingUsage).sort((a,b) => b.found.costPerOz - a.found.costPerOz).slice(0, 8);
+  if (sorted.length === 0) return '';
+  const maxCost = sorted[0].found.costPerOz;
+
+  return `<div class="card" style="margin-bottom:1rem;">
+    <div class="card-title">Most expensive ingredients <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-light);">by cost per oz across menu</span></div>
+    ${sorted.map(({ found, count }) => `
+      <div class="ing-cost-row">
+        <span class="ing-cost-name">${esc([found.brand, found.name].filter(Boolean).join(' — '))}</span>
+        <div class="ing-cost-bar"><div class="ing-cost-fill" style="width:${(found.costPerOz/maxCost*100).toFixed(0)}%;"></div></div>
+        <span class="ing-cost-val">$${found.costPerOz.toFixed(3)}/oz · ${count} drink${count!==1?'s':''}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+// ─── BALANCE CHARTS ───────────────────────────────────────────────────────────
+function getFamilyData() {
+  const counts = {};
+  recipes.forEach(r => { const k = r.family||'Other'; counts[k] = (counts[k]||0) + 1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+
+function getFlavorData() {
+  const counts = {};
+  recipes.forEach(r => (r.flavor||[]).forEach(f => { counts[f] = (counts[f]||0) + 1; }));
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+
+function getStyleData() {
+  const counts = {};
+  recipes.forEach(r => { const k = r.style||'Unknown'; counts[k] = (counts[k]||0) + 1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+
+function getSpiritData() {
+  const counts = {};
+  recipes.forEach(r => { const k = getBaseSpirit(r)||'Other'; counts[k] = (counts[k]||0) + 1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+
+function getIceData() {
+  const counts = {};
+  recipes.forEach(r => { const k = r.ice||'Unknown'; counts[k] = (counts[k]||0) + 1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+
+function getGlassData() {
+  const counts = {};
+  recipes.forEach(r => { const k = r.glass||'Unknown'; counts[k] = (counts[k]||0) + 1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+
+function renderBalanceChart(title, data, sectionKey) {
+  if (data.length === 0) return `<div class="card"><div class="card-title">${title}</div><div class="empty-note">No data yet.</div></div>`;
+  const max = data[0][1];
+  const key = sectionKey || title.replace(/\s/g,'').toLowerCase();
+  const show = expandedSections[key] ? data : data.slice(0, 6);
+  const total = data.reduce((s,[,v]) => s+v, 0);
+
+  return `<div class="card">
+    <div class="card-title card-title-expand" onclick="toggleSection('${key}')">
+      ${title}
+      <i class="ti ti-chevron-${expandedSections[key]?'up':'down'}" style="font-size:12px;"></i>
+    </div>
+    ${show.map(([label, count], i) => `
+      <div class="bar-row">
+        <span class="bar-label" style="min-width:${title==='Cocktail Family'?'130px':'80px'};">${esc(label)}</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:${BAR_COLORS[i%BAR_COLORS.length]};"></div>
+        </div>
+        <span class="bar-count">${count}</span>
+      </div>`).join('')}
+    ${data.length > 6 ? `<div class="expand-btn" onclick="toggleSection('${key}')">
+      <i class="ti ti-chevron-${expandedSections[key]?'up':'down'}" style="font-size:11px;"></i>
+      ${expandedSections[key] ? 'Show less' : `Show all ${data.length}`}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderFourCol() {
+  return `<div class="four-col">
+    ${renderBalanceChart('Style', getStyleData(), 'style')}
+    ${renderBalanceChart('Base Spirit', getSpiritData(), 'spirit')}
+    ${renderBalanceChart('Ice Type', getIceData(), 'ice')}
+    ${renderBalanceChart('Glass Type', getGlassData(), 'glass')}
+  </div>`;
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function renderTwoCol(a, b) {
+  return `<div class="two-col">${a}${b}</div>`;
+}
+
+function toggleSection(key) {
+  expandedSections[key] = !expandedSections[key];
+  renderAll();
+}
+
+function esc(str) {
+  return (str||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
