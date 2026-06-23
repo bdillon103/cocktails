@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hamlet & Ghost — Menu Manager</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1812; --ink-mid: #4a4640; --ink-light: #8a8680; --ink-ghost: #c8c4bc;
+    --parchment: #f5f2ec; --parchment-dark: #ede9e0; --parchment-mid: #e8e4db;
+    --accent: #c8392b; --accent-dim: #f5e8e6;
+    --gold: #b8860b; --gold-dim: #f0e8d0;
+    --green: #2d6a4f; --green-dim: #d8ecd4;
+    --blue: #1a4a7a; --blue-dim: #dce8f5;
+    --border: rgba(26,24,18,0.1); --border-mid: rgba(26,24,18,0.2);
+    --radius: 6px; --radius-lg: 10px;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--parchment); color: var(--ink); font-family: var(--sans); font-size: 14px; min-height: 100vh; }
+
+  .nav { background: var(--ink); padding: 0 2rem; display: flex; align-items: center; height: 52px; border-bottom: 2px solid var(--accent); }
+  .nav-brand { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--parchment); letter-spacing: 0.08em; text-transform: uppercase; margin-right: 2rem; white-space: nowrap; }
+  .nav-brand span { color: var(--accent); }
+  .nav-links { display: flex; flex: 1; }
+  .nav-link { font-family: var(--mono); font-size: 11px; color: var(--ink-ghost); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 1rem; height: 52px; display: flex; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; white-space: nowrap; text-decoration: none; }
+  .nav-link:hover { color: var(--parchment); }
+  .nav-link.active { color: var(--parchment); border-bottom-color: var(--accent); }
+
+  .page { max-width: 1100px; margin: 0 auto; padding: 1.5rem 2rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .page-title { font-family: var(--mono); font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+  .page-sub { font-size: 13px; color: var(--ink-light); margin-top: 3px; }
+
+  .btn { height: 34px; border: 1px solid var(--border-mid); border-radius: var(--radius); padding: 0 14px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; background: var(--parchment); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; white-space: nowrap; text-decoration: none; }
+  .btn:hover { background: var(--parchment-mid); }
+  .btn-primary { background: var(--ink); color: var(--parchment); border-color: var(--ink); }
+  .btn-primary:hover { background: var(--ink-mid); }
+  .btn-sm { height: 28px; font-size: 10px; padding: 0 10px; }
+  .btn-danger { border-color: var(--accent); color: var(--accent); background: white; }
+  .btn-danger:hover { background: var(--accent-dim); }
+  .btn-success { background: var(--green); color: white; border-color: var(--green); }
+  .btn-success:hover { background: #235c43; }
+  .icon-btn { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--ink-light); cursor: pointer; background: transparent; transition: all 0.15s; font-size: 13px; }
+  .icon-btn:hover { color: var(--ink); border-color: var(--border-mid); background: var(--parchment); }
+  .icon-btn.danger:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+
+  /* LAYOUT */
+  .layout { display: grid; grid-template-columns: 300px 1fr; gap: 1.25rem; align-items: start; }
+
+  /* MENUS SIDEBAR */
+  .menus-panel { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .panel-header { padding: 12px 14px; background: var(--parchment-dark); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); }
+  .menu-item { padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .menu-item:last-child { border-bottom: none; }
+  .menu-item:hover { background: var(--parchment); }
+  .menu-item.active { background: var(--ink); }
+  .menu-item.active .mi-name { color: var(--parchment); }
+  .menu-item.active .mi-meta { color: var(--ink-ghost); }
+  .menu-item.active .icon-btn { border-color: rgba(255,255,255,0.2); color: var(--ink-ghost); }
+  .menu-item.active .icon-btn:hover { background: rgba(255,255,255,0.1); color: var(--parchment); border-color: rgba(255,255,255,0.3); }
+  .mi-name { font-size: 13px; font-weight: 500; }
+  .mi-meta { font-size: 11px; color: var(--ink-light); margin-top: 2px; font-family: var(--mono); }
+  .active-badge { display: inline-flex; align-items: center; gap: 3px; background: var(--green-dim); color: var(--green); padding: 1px 6px; border-radius: 10px; font-family: var(--mono); font-size: 9px; font-weight: 500; flex-shrink: 0; }
+  .menu-item.active .active-badge { background: rgba(45,106,79,0.3); color: #7dd4ab; }
+  .panel-empty { padding: 2rem 1rem; text-align: center; color: var(--ink-light); font-size: 12px; line-height: 1.6; }
+
+  /* MENU DETAIL */
+  .detail-panel { display: flex; flex-direction: column; gap: 1rem; }
+  .card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+  .card-title { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); margin-bottom: 1rem; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+  .form-label { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); }
+  .form-input { height: 34px; border: 1px solid var(--border-mid); border-radius: var(--radius); padding: 0 10px; font-family: var(--sans); font-size: 13px; background: white; color: var(--ink); outline: none; transition: border-color 0.15s; }
+  .form-input:focus { border-color: var(--ink-mid); }
+  .form-input::placeholder { color: var(--ink-ghost); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* RECIPE PICKER */
+  .recipe-search { width: 100%; height: 34px; border: 1px solid var(--border-mid); border-radius: var(--radius); padding: 0 10px 0 32px; font-family: var(--sans); font-size: 13px; background: white; color: var(--ink); outline: none; margin-bottom: 10px; }
+  .recipe-search:focus { border-color: var(--ink-mid); }
+  .recipe-pool { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+  .pool-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: all 0.15s; background: white; }
+  .pool-item:hover { background: var(--parchment); border-color: var(--border-mid); }
+  .pool-item.selected { background: var(--green-dim); border-color: rgba(45,106,79,0.3); }
+  .pool-item.in-menu { background: var(--parchment-dark); opacity: 0.5; cursor: not-allowed; }
+  .pool-check { width: 16px; height: 16px; border: 1px solid var(--border-mid); border-radius: 3px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; }
+  .pool-item.selected .pool-check { background: var(--green); border-color: var(--green); color: white; }
+  .pool-item.in-menu .pool-check { background: var(--ink-ghost); border-color: var(--ink-ghost); color: white; }
+  .pool-name { font-size: 13px; font-weight: 500; flex: 1; }
+  .pool-meta { font-size: 11px; color: var(--ink-light); font-family: var(--mono); }
+  .pool-cost { font-family: var(--mono); font-size: 11px; font-weight: 500; }
+
+  /* ASSIGNED RECIPES */
+  .assigned-list { display: flex; flex-direction: column; gap: 6px; }
+  .assigned-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: white; transition: background 0.1s; }
+  .assigned-item:hover { background: var(--parchment); }
+  .drag-handle { color: var(--ink-ghost); cursor: grab; font-size: 14px; flex-shrink: 0; }
+  .drag-handle:active { cursor: grabbing; }
+  .assigned-name { font-size: 13px; font-weight: 500; flex: 1; }
+  .assigned-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-light); }
+  .assigned-cost { font-family: var(--mono); font-size: 12px; font-weight: 500; min-width: 40px; text-align: right; }
+  .section-tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-family: var(--mono); font-size: 10px; background: var(--parchment-dark); color: var(--ink-mid); cursor: pointer; }
+  .assigned-empty { text-align: center; padding: 2rem; color: var(--ink-light); font-size: 13px; border: 1px dashed var(--border-mid); border-radius: var(--radius); }
+
+  /* BACKUP/RESTORE */
+  .backup-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .backup-row:last-child { border-bottom: none; }
+  .backup-name { font-weight: 500; }
+  .backup-meta { font-size: 11px; color: var(--ink-light); font-family: var(--mono); margin-top: 2px; }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(26,24,18,0.55); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: var(--radius-lg); border: 1px solid var(--border); width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+  .modal-lg { max-width: 680px; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: white; z-index: 1; }
+  .modal-title { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.02em; }
+  .modal-body { padding: 1.25rem; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 1rem 1.25rem; border-top: 1px solid var(--border); background: var(--parchment-dark); border-radius: 0 0 var(--radius-lg) var(--radius-lg); position: sticky; bottom: 0; }
+
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--ink); color: var(--parchment); padding: 10px 16px; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; border-left: 3px solid var(--accent); opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; z-index: 200; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+  .stat-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .chip { padding: 4px 10px; border-radius: 20px; font-family: var(--mono); font-size: 11px; font-weight: 500; }
+  .chip-green { background: var(--green-dim); color: var(--green); }
+  .chip-warn { background: var(--gold-dim); color: var(--gold); }
+  .chip-bad { background: var(--accent-dim); color: var(--accent); }
+  .chip-grey { background: var(--parchment-dark); color: var(--ink-mid); }
+  .search-rel { position: relative; }
+  .search-rel .ti-search { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-light); font-size: 13px; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">Hamlet <span>&</span> Ghost</div>
+  <div class="nav-links">
+    <a class="nav-link " href="hamlet-ghost-ingredients.html">Ingredients</a>
+    <a class="nav-link " href="hamlet-ghost-recipes.html">Recipes</a>
+    <a class="nav-link " href="hamlet-ghost-grid.html">Menu Grid</a>
+    <a class="nav-link active" href="hamlet-ghost-manager.html">Menu Manager</a>
+    <a class="nav-link " href="hamlet-ghost-dashboard.html">Dashboard</a>
+    <a class="nav-link " href="hamlet-ghost-specsheet.html">Spec Sheet</a>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+    <span id="nav-user" style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(200,196,188,0.6);letter-spacing:0.04em;"></span>
+    <button onclick="signOut()" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(200,196,188,0.7);padding:0 12px;height:28px;border-radius:4px;cursor:pointer;">Sign out</button>
+  </div>
+</div>
+</nav>
+
+<main class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Menu Manager</div>
+      <div class="page-sub">Create seasonal menus, assign recipes, save and restore backups</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="openBackupModal()"><i class="ti ti-archive"></i> Backups</button>
+      <button class="btn btn-primary" onclick="openNewMenuModal()"><i class="ti ti-plus"></i> New menu</button>
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- MENUS LIST -->
+    <div>
+      <div class="menus-panel">
+        <div class="panel-header">
+          <span class="panel-title">Saved menus <span id="menu-count" style="margin-left:4px;background:var(--parchment-mid);padding:1px 6px;border-radius:10px;font-size:10px;">0</span></span>
+        </div>
+        <div id="menus-list">
+          <div class="panel-empty">No menus yet.<br>Create your first menu to get started.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MENU DETAIL -->
+    <div class="detail-panel" id="detail-panel">
+      <div style="text-align:center;padding:4rem 2rem;color:var(--ink-light);">
+        <div style="font-size:36px;opacity:0.15;margin-bottom:1rem;"><i class="ti ti-notebook"></i></div>
+        <div style="font-family:var(--mono);font-size:15px;font-weight:500;color:var(--ink-mid);margin-bottom:8px;">No menu selected</div>
+        <div style="font-size:13px;margin-bottom:1.5rem;">Create a new menu or select one from the list.</div>
+        <button class="btn btn-primary" onclick="openNewMenuModal()"><i class="ti ti-plus"></i> New menu</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- NEW MENU MODAL -->
+<div class="modal-overlay" id="new-menu-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Create new menu</div>
+      <button class="icon-btn" onclick="closeModal('new-menu-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Menu name</label>
+        <input type="text" class="form-input" id="new-menu-name" placeholder="e.g. Fall 2026">
+        <div style="font-size:11px;color:var(--ink-light);margin-top:5px;">Creation date will be saved automatically.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('new-menu-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createMenu()">Create menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD RECIPES MODAL -->
+<div class="modal-overlay" id="add-recipes-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">Add recipes to menu</div>
+      <button class="icon-btn" onclick="closeModal('add-recipes-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="search-rel" style="margin-bottom:10px;">
+        <i class="ti ti-search"></i>
+        <input type="text" class="recipe-search" style="padding-left:32px;" placeholder="Search recipes..." id="pool-search" oninput="renderPool()">
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-light);margin-bottom:8px;" id="pool-header">Select recipes to add</div>
+      <div class="recipe-pool" id="recipe-pool"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('add-recipes-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addSelectedRecipes()"><i class="ti ti-plus"></i> Add to menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION LABEL MODAL -->
+<div class="modal-overlay" id="section-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Set section label</div>
+      <button class="icon-btn" onclick="closeModal('section-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Section name</label>
+        <select class="form-input" id="section-select">
+          <option value="Cocktail Menu">Cocktail Menu</option>
+          <option value="Spirit Free Cocktails">Spirit Free Cocktails</option>
+          <option value="Martini Recipes">Martini Recipes</option>
+          <option value="Seasonal Specials">Seasonal Specials</option>
+          <option value="Custom...">Custom...</option>
+        </select>
+      </div>
+      <div class="form-group" id="section-custom-wrap" style="display:none;">
+        <label class="form-label">Custom section name</label>
+        <input type="text" class="form-input" id="section-custom" placeholder="e.g. Late Night Menu">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('section-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSectionLabel()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- BACKUP MODAL -->
+<div class="modal-overlay" id="backup-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">Backups & restore</div>
+      <button class="icon-btn" onclick="closeModal('backup-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="saveBackup()"><i class="ti ti-download"></i> Save backup now</button>
+        <button class="btn" onclick="document.getElementById('restore-input').click()"><i class="ti ti-upload"></i> Restore from file</button>
+        <input type="file" id="restore-input" accept=".json" style="display:none;" onchange="restoreBackup(event)">
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-light);margin-bottom:10px;">Saved backups</div>
+      <div id="backup-list"></div>
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);font-size:12px;color:var(--ink-light);">
+        Backups include all recipes, ingredients, and menus. Files are saved as JSON and can be restored on any device.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('backup-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- RENAME MODAL -->
+<div class="modal-overlay" id="rename-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Rename menu</div>
+      <button class="icon-btn" onclick="closeModal('rename-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Menu name</label>
+        <input type="text" class="form-input" id="rename-input" placeholder="e.g. Summer 2026">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('rename-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://qgfrzhvgrilgxygoxjcn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Eq6r-RQzxU13f2A1sf3vHw_VoXb9tav';
+const LS_KEY = 'hg_app_data_v1';
+
+// ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
+async function sbRequest(method, path, body) {
+  const session = getSession();
+  const headers = {
+    'apikey': SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`
+  };
+  const res = await fetch(SUPABASE_URL + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+  return res.json().catch(() => null);
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function getSession() {
+  const raw = localStorage.getItem('hg_session');
+  if (!raw) return null;
+  try {
+    const session = JSON.parse(raw);
+    // Check if expired
+    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
+      localStorage.removeItem('hg_session');
+      return null;
+    }
+    return session;
+  } catch(e) { return null; }
+}
+
+async function signIn(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign in failed');
+  localStorage.setItem('hg_session', JSON.stringify(data));
+  return data;
+}
+
+async function signOut() {
+  const session = getSession();
+  if (session) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${session.access_token}` }
+    }).catch(() => {});
+  }
+  localStorage.removeItem('hg_session');
+  showLoginScreen();
+}
+
+function requireAuth() {
+  const session = getSession();
+  if (!session) {
+    showLoginScreen();
+    return false;
+  }
+  return true;
+}
+
+// ─── DATA LAYER ───────────────────────────────────────────────────────────────
+async function loadAppData() {
+  // Try Supabase first
+  try {
+    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+    if (rows && rows.length > 0 && rows[0].data) {
+      const data = rows[0].data;
+      // Update local cache
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+      return data;
+    }
+  } catch(e) {
+    console.warn('Supabase load failed, using local cache:', e.message);
+  }
+  // Fallback to localStorage cache
+  const cached = localStorage.getItem(LS_KEY);
+  if (cached) return JSON.parse(cached);
+  // Last resort: try old localStorage keys for migration
+  return migrateFromOldKeys();
+}
+
+async function saveAppData(data) {
+  // Always update local cache immediately
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+  // Save to Supabase
+  try {
+    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  } catch(e) {
+    console.warn('Supabase save failed, data cached locally:', e.message);
+  }
+}
+
+function migrateFromOldKeys() {
+  // Migrate from old separate localStorage keys
+  const spirits = localStorage.getItem('hg_spirits');
+  const other = localStorage.getItem('hg_other');
+  const recipes = localStorage.getItem('hg_recipes');
+  const menus = localStorage.getItem('hg_menus');
+  const importMeta = localStorage.getItem('hg_import_meta');
+  const salesData = localStorage.getItem('hg_sales_data');
+  
+  if (spirits || other || recipes || menus) {
+    const migrated = {
+      spirits: spirits ? JSON.parse(spirits) : [],
+      otherIngredients: other ? JSON.parse(other) : [],
+      recipes: recipes ? JSON.parse(recipes) : [],
+      menus: menus ? JSON.parse(menus) : [],
+      importMeta: importMeta ? JSON.parse(importMeta) : null,
+      salesData: salesData ? JSON.parse(salesData) : {}
+    };
+    console.log('Migrated data from old localStorage keys');
+    return migrated;
+  }
+  return { spirits: [], otherIngredients: [], recipes: [], menus: [], importMeta: null, salesData: {} };
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:#f5f2ec;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;">
+      <div style="background:white;border:1px solid rgba(26,24,18,0.1);border-radius:12px;padding:2.5rem;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <div style="text-align:center;margin-bottom:2rem;">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#1a1812;margin-bottom:4px;">Hamlet <span style="color:#c8392b;">&</span> Ghost</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#8a8680;">Cocktail Manager</div>
+        </div>
+        <div id="login-error" style="display:none;background:#f5e8e6;color:#c8392b;padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:1rem;"></div>
+        <div style="margin-bottom:12px;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Email</label>
+          <input type="email" id="login-email" placeholder="your@email.com" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:1.5rem;">
+          <label style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#8a8680;display:block;margin-bottom:5px;">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" style="width:100%;height:38px;border:1px solid rgba(26,24,18,0.2);border-radius:6px;padding:0 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;box-sizing:border-box;" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button onclick="doLogin()" id="login-btn" style="width:100%;height:40px;background:#1a1812;color:#f5f2ec;border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Sign in</button>
+      </div>
+    </div>`;
+  // Re-import fonts since we wiped body
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap';
+  document.head.appendChild(link);
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  if (!email || !password) {
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.textContent = 'Signing in...';
+  btn.disabled = true;
+  errEl.style.display = 'none';
+  try {
+    await signIn(email, password);
+    window.location.reload();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.textContent = 'Sign in';
+    btn.disabled = false;
+  }
+}
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let menus = [];       // { id, name, season, year, recipeIds: [{id, section}], createdAt, isActive }
+let recipes = [];
+let spirits = [];
+let otherIngredients = [];
+let activeMenuId = null;
+let poolSelected = [];
+let editingSectionRecipeId = null;
+let renamingMenuId = null;
+const NEGLIGIBLE = ['dash','barspoon','rinse'];
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  if (!requireAuth()) return;
+  const session = getSession();
+  if (session && session.user) {
+    const el = document.getElementById('nav-user');
+    if (el) el.textContent = session.user.email;
+  }
+  load();
+  renderMenusList();
+  // Auto-select active menu
+  const active = menus.find(m => m.isActive);
+  if (active) selectMenu(active.id);
+});
+
+function load() {
+  const m = localStorage.getItem('hg_menus');
+  const r = localStorage.getItem('hg_recipes');
+  const s = localStorage.getItem('hg_spirits');
+  const o = localStorage.getItem('hg_other');
+  if (m) menus = JSON.parse(m);
+  if (r) recipes = JSON.parse(r);
+  if (s) spirits = JSON.parse(s);
+  if (o) otherIngredients = JSON.parse(o);
+}
+
+async function saveMenus() {
+  const data = await loadAppData();
+  data.menus = menus;
+  await saveAppData(data);
+}
+
+// ─── COSTING ─────────────────────────────────────────────────────────────────
+function findIng(id) {
+  return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || null;
+}
+
+function calcCost(r) {
+  if (!r.ingredients || r.ingredients.length === 0) return null;
+  let total = 0, hasAny = false;
+  for (const ing of r.ingredients) {
+    const rows = ing.isBatchGroup ? (ing.children || []) : [ing];
+    for (const row of rows) {
+      if (!row.ingredientId || NEGLIGIBLE.includes(row.unit)) continue;
+      const found = findIng(row.ingredientId);
+      if (!found || !found.costPerOz) continue;
+      const qty = parseFloat(row.qty) || 0;
+      const oz = row.unit === 'ml' ? qty / 29.5735 : qty;
+      total += oz * found.costPerOz;
+      hasAny = true;
+    }
+  }
+  return hasAny ? total : null;
+}
+
+function calcPC(r) {
+  const cost = calcCost(r);
+  if (cost === null || !r.menuPrice) return null;
+  return (cost / r.menuPrice) * 100;
+}
+
+function pcColor(pct) {
+  if (pct === null) return 'var(--ink-ghost)';
+  if (pct <= 20) return 'var(--green)';
+  if (pct <= 25) return 'var(--gold)';
+  return 'var(--accent)';
+}
+
+// ─── MENUS LIST ───────────────────────────────────────────────────────────────
+function renderMenusList() {
+  const list = document.getElementById('menus-list');
+  document.getElementById('menu-count').textContent = menus.length;
+  if (menus.length === 0) {
+    list.innerHTML = `<div class="panel-empty">No menus yet.<br>Create your first menu to get started.</div>`;
+    return;
+  }
+  list.innerHTML = menus.map(m => {
+    const recipeCount = (m.recipeIds || []).length;
+    const isActive = m.isActive;
+    return `<div class="menu-item ${activeMenuId === m.id ? 'active' : ''}" onclick="selectMenu('${m.id}')">
+      <div style="flex:1;min-width:0;">
+        <div class="mi-name">${esc(m.name)}</div>
+        <div class="mi-meta">${recipeCount} cocktail${recipeCount !== 1 ? 's' : ''} · Created ${new Date(m.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        ${isActive ? `<span class="active-badge"><i class="ti ti-check" style="font-size:9px;"></i> Active</span>` : ''}
+        <div class="icon-btn" onclick="event.stopPropagation();openRenameModal('${m.id}')" title="Rename"><i class="ti ti-pencil"></i></div>
+        <div class="icon-btn danger" onclick="event.stopPropagation();deleteMenu('${m.id}')" title="Delete"><i class="ti ti-trash"></i></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectMenu(id) {
+  activeMenuId = id;
+  renderMenusList();
+  try {
+    renderDetail();
+  } catch(e) {
+    console.error('renderDetail error:', e);
+  }
+}
+
+// ─── MENU DETAIL ─────────────────────────────────────────────────────────────
+function renderDetail() {
+  const menu = menus.find(m => m.id === activeMenuId);
+  if (!menu) return;
+  const panel = document.getElementById('detail-panel');
+  const assigned = (menu.recipeIds || []);
+  // Filter out any recipe IDs that no longer exist
+  const assignedRecipes = assigned
+    .map(a => ({ ...a, recipe: recipes.find(r => r.id === a.id) }))
+    .filter(a => a.recipe != null);
+  // Clean up stale IDs silently
+  if (assignedRecipes.length !== assigned.length) {
+    menu.recipeIds = assignedRecipes.map(a => ({ id: a.id, section: a.section }));
+    saveMenus();
+  }
+
+  // Stats
+  const priced = assignedRecipes.filter(a => calcPC(a.recipe) !== null);
+  const avgPc = priced.length > 0 ? priced.reduce((s,a) => s + calcPC(a.recipe), 0) / priced.length : null;
+  const over = priced.filter(a => calcPC(a.recipe) > 20).length;
+  const unpriced = assignedRecipes.filter(a => calcPC(a.recipe) === null).length;
+
+  panel.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div>
+          <div style="font-family:var(--mono);font-size:18px;font-weight:500;letter-spacing:-0.02em;">${esc(menu.name)}</div>
+          <div style="font-size:13px;color:var(--ink-light);margin-top:3px;">Created ${new Date(menu.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · ${assignedRecipes.length} cocktail${assignedRecipes.length!==1?'s':''}</div>
+          <div class="stat-chips">
+            ${avgPc !== null ? `<span class="chip chip-${avgPc<=20?'green':avgPc<=25?'warn':'bad'}">Avg COGS: ${avgPc.toFixed(1)}%</span>` : ''}
+            ${over > 0 ? `<span class="chip chip-warn">${over} over target</span>` : ''}
+            ${unpriced > 0 ? `<span class="chip chip-bad">${unpriced} unpriced</span>` : ''}
+            ${assignedRecipes.length > 0 && over === 0 && unpriced === 0 ? `<span class="chip chip-green">All costed ✓</span>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${!menu.isActive ? `<button class="btn btn-success" onclick="setActiveMenu('${menu.id}')"><i class="ti ti-check"></i> Set as active</button>` : `<span class="chip chip-green" style="display:inline-flex;align-items:center;gap:4px;height:34px;padding:0 14px;"><i class="ti ti-check" style="font-size:12px;"></i> Active menu</span>`}
+          <button class="btn" onclick="duplicateMenu('${menu.id}')"><i class="ti ti-copy"></i> Duplicate</button>
+          <a class="btn" href="hamlet-ghost-grid.html"><i class="ti ti-table"></i> View grid</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <div class="card-title" style="margin-bottom:0;">Cocktails on this menu</div>
+        <button class="btn btn-sm btn-primary" onclick="openAddRecipesModal()"><i class="ti ti-plus"></i> Add cocktails</button>
+      </div>
+      ${assignedRecipes.length === 0
+        ? `<div class="assigned-empty">No cocktails yet — click Add cocktails to build this menu.</div>`
+        : `<div class="assigned-list" id="assigned-list">
+            ${renderAssignedList(assignedRecipes)}
+          </div>`
+      }
+    </div>
+  `;
+
+  renderBackupList();
+}
+
+function renderAssignedList(assignedRecipes) {
+  // Group by section
+  const sections = {};
+  assignedRecipes.forEach(a => {
+    const sec = a.section || 'Cocktail Menu';
+    if (!sections[sec]) sections[sec] = [];
+    sections[sec].push(a);
+  });
+
+  return Object.entries(sections).map(([section, items]) => `
+    <div style="margin-bottom:14px;">
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-light);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border);">${esc(section)}</div>
+      ${items.map(a => {
+        const r = a.recipe;
+        const pc = calcPC(r);
+        const cost = calcCost(r);
+        return `<div class="assigned-item">
+          <i class="ti ti-grip-vertical drag-handle"></i>
+          <div style="flex:1;min-width:0;">
+            <div class="assigned-name">${esc(r.name||'Untitled')}</div>
+            <div class="assigned-meta">${r.style||'—'} · ${r.glass||'—'} · ${r.ice||'—'}</div>
+          </div>
+          <span class="section-tag" onclick="openSectionModal('${a.id}')" title="Change section">${esc(a.section||'Cocktail Menu')}</span>
+          <div style="display:flex;align-items:center;gap:8px;margin-left:8px;">
+            <span class="assigned-cost" style="color:${pcColor(pc)};">${pc!==null?pc.toFixed(1)+'%':'—'}</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--ink-light);">${r.menuPrice?'$'+r.menuPrice.toFixed(2):'—'}</span>
+            <div class="icon-btn danger" onclick="removeFromMenu('${activeMenuId}','${a.id}')" title="Remove"><i class="ti ti-x"></i></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `).join('');
+}
+
+// ─── CREATE / DELETE MENU ────────────────────────────────────────────────────
+function openNewMenuModal() {
+  document.getElementById('new-menu-name').value = '';
+  document.getElementById('new-menu-modal').classList.add('open');
+  setTimeout(() => document.getElementById('new-menu-name').focus(), 50);
+}
+
+function createMenu() {
+  const name = document.getElementById('new-menu-name').value.trim();
+  if (!name) { showToast('Enter a menu name'); return; }
+  const isFirst = menus.length === 0;
+  const menu = {
+    id: crypto.randomUUID(),
+    name,
+    recipeIds: [],
+    isActive: isFirst,
+    createdAt: Date.now()
+  };
+  menus.unshift(menu);
+  if (isFirst) menus.forEach(m => m.isActive = m.id === menu.id);
+  saveMenus();
+  closeModal('new-menu-modal');
+  renderMenusList();
+  selectMenu(menu.id);
+  showToast(`✓ Created: ${menu.name}`);
+}
+
+function deleteMenu(id) {
+  const m = menus.find(m => m.id === id);
+  if (!confirm(`Delete "${m?.name}"? This cannot be undone.`)) return;
+  menus = menus.filter(m => m.id !== id);
+  if (activeMenuId === id) {
+    activeMenuId = menus[0]?.id || null;
+    document.getElementById('detail-panel').innerHTML = `<div style="text-align:center;padding:4rem 2rem;color:var(--ink-light);">
+      <div style="font-size:36px;opacity:0.15;margin-bottom:1rem;"><i class="ti ti-notebook"></i></div>
+      <div style="font-family:var(--mono);font-size:15px;font-weight:500;color:var(--ink-mid);margin-bottom:8px;">No menu selected</div>
+      <button class="btn btn-primary" onclick="openNewMenuModal()"><i class="ti ti-plus"></i> New menu</button>
+    </div>`;
+  }
+  saveMenus();
+  renderMenusList();
+  if (activeMenuId) selectMenu(activeMenuId);
+  showToast('Menu deleted');
+}
+
+function setActiveMenu(id) {
+  menus.forEach(m => m.isActive = m.id === id);
+  saveMenus();
+  renderMenusList();
+  renderDetail();
+  showToast('✓ Active menu updated — grid and dashboard will reflect this menu');
+}
+
+function duplicateMenu(id) {
+  const m = menus.find(m => m.id === id);
+  if (!m) return;
+  const copy = JSON.parse(JSON.stringify(m));
+  copy.id = crypto.randomUUID();
+  copy.name = m.name + ' (copy)';
+  copy.isActive = false;
+  copy.createdAt = Date.now();
+  menus.unshift(copy);
+  saveMenus();
+  renderMenusList();
+  selectMenu(copy.id);
+  showToast('Menu duplicated');
+}
+
+// ─── RENAME ───────────────────────────────────────────────────────────────────
+function openRenameModal(id) {
+  renamingMenuId = id;
+  const m = menus.find(m => m.id === id);
+  document.getElementById('rename-input').value = m?.name || '';
+  document.getElementById('rename-modal').classList.add('open');
+  setTimeout(() => document.getElementById('rename-input').focus(), 50);
+}
+
+function confirmRename() {
+  const name = document.getElementById('rename-input').value.trim();
+  if (!name) { showToast('Enter a name'); return; }
+  const m = menus.find(m => m.id === renamingMenuId);
+  if (!m) return;
+  m.name = name;
+  saveMenus();
+  closeModal('rename-modal');
+  renderMenusList();
+  if (activeMenuId === renamingMenuId) renderDetail();
+  showToast(`✓ Renamed to: ${name}`);
+}
+
+// ─── ADD RECIPES MODAL ────────────────────────────────────────────────────────
+function openAddRecipesModal() {
+  poolSelected = [];
+  document.getElementById('pool-search').value = '';
+  document.getElementById('add-recipes-modal').classList.add('open');
+  renderPool();
+}
+
+function renderPool() {
+  const menu = menus.find(m => m.id === activeMenuId);
+  if (!menu) return;
+  const q = document.getElementById('pool-search').value.toLowerCase();
+  const inMenu = new Set((menu.recipeIds || []).map(r => r.id));
+
+  const filtered = recipes.filter(r =>
+    !q || `${r.name} ${r.bartender} ${r.style}`.toLowerCase().includes(q)
+  );
+
+  document.getElementById('pool-header').textContent =
+    `${filtered.length} recipe${filtered.length!==1?'s':''} · ${poolSelected.length} selected`;
+
+  document.getElementById('recipe-pool').innerHTML = filtered.map(r => {
+    const inM = inMenu.has(r.id);
+    const sel = poolSelected.includes(r.id);
+    const pc = calcPC(r);
+    return `<div class="pool-item ${inM?'in-menu':''} ${sel&&!inM?'selected':''}" onclick="${inM?'':` togglePoolSelect('${r.id}')`}">
+      <div class="pool-check">${inM ? '<i class="ti ti-check" style="font-size:10px;"></i>' : sel ? '<i class="ti ti-check" style="font-size:10px;"></i>' : ''}</div>
+      <div style="flex:1;">
+        <div class="pool-name">${esc(r.name||'Untitled')}</div>
+        <div class="pool-meta">${r.style||'—'} · ${r.bartender||'—'}</div>
+      </div>
+      <div class="pool-cost" style="color:${pcColor(pc)}">${pc!==null?pc.toFixed(1)+'%':'—'}</div>
+      ${inM ? '<span style="font-family:var(--mono);font-size:10px;color:var(--ink-ghost);">on menu</span>' : ''}
+    </div>`;
+  }).join('') || `<div style="text-align:center;padding:2rem;color:var(--ink-light);font-size:13px;">No recipes found</div>`;
+}
+
+function togglePoolSelect(id) {
+  const idx = poolSelected.indexOf(id);
+  if (idx === -1) poolSelected.push(id);
+  else poolSelected.splice(idx, 1);
+  renderPool();
+}
+
+function addSelectedRecipes() {
+  const menu = menus.find(m => m.id === activeMenuId);
+  if (!menu || poolSelected.length === 0) { showToast('Select at least one recipe'); return; }
+  poolSelected.forEach(id => {
+    if (!menu.recipeIds.find(r => r.id === id)) {
+      menu.recipeIds.push({ id, section: 'Cocktail Menu' });
+    }
+  });
+  saveMenus();
+  closeModal('add-recipes-modal');
+  renderDetail();
+  showToast(`✓ Added ${poolSelected.length} cocktail${poolSelected.length!==1?'s':''} to menu`);
+  poolSelected = [];
+}
+
+function removeFromMenu(menuId, recipeId) {
+  const mid = menuId || activeMenuId;
+  const menu = menus.find(m => m.id === mid);
+  if (!menu) return;
+  menu.recipeIds = menu.recipeIds.filter(r => r.id !== recipeId);
+  saveMenus();
+  renderDetail();
+  showToast('Removed from menu');
+}
+
+// ─── SECTION LABELS ───────────────────────────────────────────────────────────
+function openSectionModal(recipeId) {
+  editingSectionRecipeId = recipeId;
+  const menu = menus.find(m => m.id === activeMenuId);
+  const entry = menu?.recipeIds?.find(r => r.id === recipeId);
+  const current = entry?.section || 'Cocktail Menu';
+  const sel = document.getElementById('section-select');
+  const knownSections = ['Cocktail Menu','Spirit Free Cocktails','Martini Recipes','Seasonal Specials'];
+  sel.value = knownSections.includes(current) ? current : 'Custom...';
+  document.getElementById('section-custom').value = knownSections.includes(current) ? '' : current;
+  document.getElementById('section-custom-wrap').style.display = knownSections.includes(current) ? 'none' : 'block';
+  document.getElementById('section-modal').classList.add('open');
+}
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'section-select') {
+    document.getElementById('section-custom-wrap').style.display =
+      e.target.value === 'Custom...' ? 'block' : 'none';
+  }
+});
+
+function saveSectionLabel() {
+  const sel = document.getElementById('section-select').value;
+  const custom = document.getElementById('section-custom').value.trim();
+  const label = sel === 'Custom...' ? custom : sel;
+  if (!label) { showToast('Enter a section name'); return; }
+  const menu = menus.find(m => m.id === activeMenuId);
+  const entry = menu?.recipeIds?.find(r => r.id === editingSectionRecipeId);
+  if (entry) entry.section = label;
+  saveMenus();
+  closeModal('section-modal');
+  renderDetail();
+  showToast(`✓ Section set: ${label}`);
+}
+
+// ─── BACKUP / RESTORE ────────────────────────────────────────────────────────
+function renderBackupList() {
+  const backups = getBackups();
+  const el = document.getElementById('backup-list');
+  if (!el) return;
+  if (backups.length === 0) {
+    el.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--ink-light);font-size:13px;">No saved backups yet.</div>`;
+    return;
+  }
+  el.innerHTML = backups.map((b, i) => `
+    <div class="backup-row">
+      <div>
+        <div class="backup-name">${esc(b.label)}</div>
+        <div class="backup-meta">${b.recipes} recipes · ${b.menus} menus · ${b.date}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm" onclick="downloadBackup(${i})"><i class="ti ti-download"></i> Download</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteBackup(${i})"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function getBackups() {
+  const b = localStorage.getItem('hg_backups');
+  return b ? JSON.parse(b) : [];
+}
+
+async function saveBackup() {
+  const appData = await loadAppData();
+  const data = {
+    spirits: appData.spirits || [],
+    other: appData.otherIngredients || [],
+    otherIngredients: appData.otherIngredients || [],
+    recipes: appData.recipes || [],
+    menus: appData.menus || [],
+    importMeta: appData.importMeta || null,
+    salesData: appData.salesData || {},
+    savedAt: new Date().toISOString()
+  };
+  const label = `Backup — ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}`;
+  const backups = getBackups();
+  backups.unshift({
+    label,
+    recipes: data.recipes.length,
+    menus: data.menus.length,
+    date: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+    data
+  });
+  // Keep last 10
+  if (backups.length > 10) backups.splice(10);
+  localStorage.setItem('hg_backups', JSON.stringify(backups));
+  // Also download
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const filename = `hamlet-ghost-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+  renderBackupList();
+  showToast('✓ Backup saved and downloaded');
+}
+
+function downloadBackup(idx) {
+  const backups = getBackups();
+  const b = backups[idx];
+  if (!b) return;
+  const blob = new Blob([JSON.stringify(b.data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `hamlet-ghost-backup-${idx+1}.json`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function deleteBackup(idx) {
+  const backups = getBackups();
+  backups.splice(idx, 1);
+  localStorage.setItem('hg_backups', JSON.stringify(backups));
+  renderBackupList();
+  showToast('Backup deleted');
+}
+
+function restoreBackup(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!confirm('Restore this backup? This will overwrite all current data.')) return;
+      const restored = {
+        spirits: data.spirits || [],
+        otherIngredients: data.other || data.otherIngredients || [],
+        recipes: data.recipes || [],
+        menus: data.menus || [],
+        importMeta: data.importMeta || null,
+        salesData: data.salesData || {}
+      };
+      await saveAppData(restored);
+      await loadManager();
+      renderMenusList();
+      const active = menus.find(m => m.isActive);
+      if (active) selectMenu(active.id);
+      showToast('✓ Backup restored successfully');
+    } catch(err) {
+      showToast('Error reading backup file');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function openBackupModal() {
+  renderBackupList();
+  document.getElementById('backup-modal').classList.add('open');
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+function esc(str) {
+  return (str||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
