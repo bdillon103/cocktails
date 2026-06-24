@@ -388,18 +388,12 @@ window.addEventListener('DOMContentLoaded', async function() {
     if (el) el.textContent = session.user.email;
   }
   try {
-    var rs = localStorage.getItem('hg_recipes');
-    var sp = localStorage.getItem('hg_spirits');
-    var ot = localStorage.getItem('hg_other');
-    var mn = localStorage.getItem('hg_menus');
-    if (sp) spirits = JSON.parse(sp);
-    if (ot) otherIngredients = JSON.parse(ot);
-    var allRecipes = rs ? JSON.parse(rs) : [];
-    var activeMenu = null;
-    if (mn) {
-      var menuArr = JSON.parse(mn);
-      activeMenu = menuArr.filter(function(m){return m.isActive;})[0] || menuArr[0] || null;
-    }
+    var appData = await loadAppData();
+    spirits = appData.spirits || [];
+    otherIngredients = appData.otherIngredients || [];
+    var allRecipes = appData.recipes || [];
+    var allMenus = appData.menus || [];
+    var activeMenu = allMenus.filter(function(m){return m.isActive;})[0] || allMenus[0] || null;
     if (activeMenu) {
       var ids = {};
       (activeMenu.recipeIds || []).forEach(function(r){ ids[r.id] = true; });
