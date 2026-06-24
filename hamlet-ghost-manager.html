@@ -712,7 +712,7 @@ function openNewMenuModal() {
   setTimeout(() => document.getElementById('new-menu-name').focus(), 50);
 }
 
-function createMenu() {
+async function createMenu() {
   const name = document.getElementById('new-menu-name').value.trim();
   if (!name) { showToast('Enter a menu name'); return; }
   const isFirst = menus.length === 0;
@@ -725,14 +725,14 @@ function createMenu() {
   };
   menus.unshift(menu);
   if (isFirst) menus.forEach(m => m.isActive = m.id === menu.id);
-  saveMenus();
+  await saveMenus();
   closeModal('new-menu-modal');
   renderMenusList();
   selectMenu(menu.id);
   showToast(`✓ Created: ${menu.name}`);
 }
 
-function deleteMenu(id) {
+async function deleteMenu(id) {
   const m = menus.find(m => m.id === id);
   if (!confirm(`Delete "${m?.name}"? This cannot be undone.`)) return;
   menus = menus.filter(m => m.id !== id);
@@ -744,21 +744,21 @@ function deleteMenu(id) {
       <button class="btn btn-primary" onclick="openNewMenuModal()"><i class="ti ti-plus"></i> New menu</button>
     </div>`;
   }
-  saveMenus();
+  await saveMenus();
   renderMenusList();
   if (activeMenuId) selectMenu(activeMenuId);
   showToast('Menu deleted');
 }
 
-function setActiveMenu(id) {
+async function setActiveMenu(id) {
   menus.forEach(m => m.isActive = m.id === id);
-  saveMenus();
+  await saveMenus();
   renderMenusList();
   renderDetail();
   showToast('✓ Active menu updated — grid and dashboard will reflect this menu');
 }
 
-function duplicateMenu(id) {
+async function duplicateMenu(id) {
   const m = menus.find(m => m.id === id);
   if (!m) return;
   const copy = JSON.parse(JSON.stringify(m));
@@ -767,7 +767,7 @@ function duplicateMenu(id) {
   copy.isActive = false;
   copy.createdAt = Date.now();
   menus.unshift(copy);
-  saveMenus();
+  await saveMenus();
   renderMenusList();
   selectMenu(copy.id);
   showToast('Menu duplicated');
@@ -788,7 +788,7 @@ function confirmRename() {
   const m = menus.find(m => m.id === renamingMenuId);
   if (!m) return;
   m.name = name;
-  saveMenus();
+  await saveMenus();
   closeModal('rename-modal');
   renderMenusList();
   if (activeMenuId === renamingMenuId) renderDetail();
@@ -847,19 +847,19 @@ function addSelectedRecipes() {
       menu.recipeIds.push({ id, section: 'Cocktail Menu' });
     }
   });
-  saveMenus();
+  await saveMenus();
   closeModal('add-recipes-modal');
   renderDetail();
   showToast(`✓ Added ${poolSelected.length} cocktail${poolSelected.length!==1?'s':''} to menu`);
   poolSelected = [];
 }
 
-function removeFromMenu(menuId, recipeId) {
+async function removeFromMenu(menuId, recipeId) {
   const mid = menuId || activeMenuId;
   const menu = menus.find(m => m.id === mid);
   if (!menu) return;
   menu.recipeIds = menu.recipeIds.filter(r => r.id !== recipeId);
-  saveMenus();
+  await saveMenus();
   renderDetail();
   showToast('Removed from menu');
 }
@@ -893,7 +893,7 @@ function saveSectionLabel() {
   const menu = menus.find(m => m.id === activeMenuId);
   const entry = menu?.recipeIds?.find(r => r.id === editingSectionRecipeId);
   if (entry) entry.section = label;
-  saveMenus();
+  await saveMenus();
   closeModal('section-modal');
   renderDetail();
   showToast(`✓ Section set: ${label}`);
