@@ -377,13 +377,8 @@ async function loadData() {
   allRecipes = data.recipes || [];
   menus = data.menus || [];
   salesData = data.salesData || {};
-  // Always read fresh from hg_menus
-  if (mn) {
-    try {
-      const menuArr = JSON.parse(mn);
-      activeMenu = menuArr.find(m => m.isActive) || menuArr[0] || null;
-    } catch(e) {}
-  }
+  // Always read fresh from menus array
+  activeMenu = menus.find(m => m.isActive) || menus[0] || null;
   if (activeMenu) {
     const ids = new Set((activeMenu.recipeIds || []).map(r => r.id));
     recipes = allRecipes.filter(r => ids.has(r.id));
