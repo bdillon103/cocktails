@@ -521,6 +521,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (active) selectMenu(active.id);
 });
 
+async function loadManager() {
+  const data = await loadAppData();
+  menus = data.menus || [];
+  recipes = data.recipes || [];
+  spirits = data.spirits || [];
+  otherIngredients = data.otherIngredients || [];
+}
+
 function load() {
   const m = localStorage.getItem('hg_menus');
   const r = localStorage.getItem('hg_recipes');
