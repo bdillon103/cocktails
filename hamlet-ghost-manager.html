@@ -531,14 +531,7 @@ async function loadManager() {
 }
 
 function load() {
-  const m = localStorage.getItem('hg_menus');
-  const r = localStorage.getItem('hg_recipes');
-  const s = localStorage.getItem('hg_spirits');
-  const o = localStorage.getItem('hg_other');
-  if (m) menus = JSON.parse(m);
-  if (r) recipes = JSON.parse(r);
-  if (s) spirits = JSON.parse(s);
-  if (o) otherIngredients = JSON.parse(o);
+  // Legacy stub - use loadManager() instead
 }
 
 async function saveMenus() {
