@@ -161,7 +161,7 @@
       <div class="page-sub">Create seasonal menus, assign recipes, save and restore backups</div>
     </div>
     <div style="display:flex;gap:8px;">
-      <button class="btn" onclick="openBackupModal()"><i class="ti ti-archive"></i> Backups</button>
+      <button class="btn" onclick="openBackupModal().catch(e=>console.error(e))"><i class="ti ti-archive"></i> Backups</button>
       <button class="btn btn-primary" onclick="openNewMenuModal()"><i class="ti ti-plus"></i> New menu</button>
     </div>
   </div>
@@ -275,7 +275,7 @@
     </div>
     <div class="modal-body">
       <div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;">
-        <button class="btn btn-primary" onclick="saveBackup()"><i class="ti ti-download"></i> Save backup now</button>
+        <button class="btn btn-primary" onclick="saveBackup().catch(e=>console.error(e))"><i class="ti ti-download"></i> Save backup now</button>
         <button class="btn" onclick="document.getElementById('restore-input').click()"><i class="ti ti-upload"></i> Restore from file</button>
         <input type="file" id="restore-input" accept=".json" style="display:none;" onchange="restoreBackup(event)">
       </div>
@@ -987,7 +987,7 @@ function deleteBackup(idx) {
   showToast('Backup deleted');
 }
 
-function restoreBackup(e) {
+async function restoreBackup(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -1017,9 +1017,10 @@ function restoreBackup(e) {
   e.target.value = '';
 }
 
-function openBackupModal() {
-  renderBackupList();
+async function openBackupModal() {
   document.getElementById('backup-modal').classList.add('open');
+  // Small delay to let modal render before populating
+  setTimeout(() => renderBackupList(), 50);
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
