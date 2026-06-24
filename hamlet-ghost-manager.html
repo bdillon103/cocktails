@@ -782,7 +782,7 @@ function openRenameModal(id) {
   setTimeout(() => document.getElementById('rename-input').focus(), 50);
 }
 
-function confirmRename() {
+async function confirmRename() {
   const name = document.getElementById('rename-input').value.trim();
   if (!name) { showToast('Enter a name'); return; }
   const m = menus.find(m => m.id === renamingMenuId);
@@ -839,7 +839,7 @@ function togglePoolSelect(id) {
   renderPool();
 }
 
-function addSelectedRecipes() {
+async function addSelectedRecipes() {
   const menu = menus.find(m => m.id === activeMenuId);
   if (!menu || poolSelected.length === 0) { showToast('Select at least one recipe'); return; }
   poolSelected.forEach(id => {
@@ -885,7 +885,7 @@ document.addEventListener('change', e => {
   }
 });
 
-function saveSectionLabel() {
+async function saveSectionLabel() {
   const sel = document.getElementById('section-select').value;
   const custom = document.getElementById('section-custom').value.trim();
   const label = sel === 'Custom...' ? custom : sel;
