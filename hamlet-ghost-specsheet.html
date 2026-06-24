@@ -513,22 +513,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     const el = document.getElementById('nav-user');
     if (el) el.textContent = session.user.email;
   }
-  loadData();
+  await loadData();
   buildSections();
   renderSectionList();
   refreshPreview();
 });
 
-function loadData() {
-  const sp = localStorage.getItem('hg_spirits');
-  const ot = localStorage.getItem('hg_other');
-  const rs = localStorage.getItem('hg_recipes');
-  const mn = localStorage.getItem('hg_menus');
-  const am = localStorage.getItem('hg_active_menu');
-  if (sp) spirits = JSON.parse(sp);
-  if (ot) otherIngredients = JSON.parse(ot);
-  if (rs) allRecipes = JSON.parse(rs);
-  if (mn) menus = JSON.parse(mn);
+async function loadData() {
+  const data = await loadAppData();
+  spirits = data.spirits || [];
+  otherIngredients = data.otherIngredients || [];
+  allRecipes = data.recipes || [];
+  menus = data.menus || [];
 
   activeMenu = menus.find(m => m.isActive) || menus[0] || null;
 
