@@ -609,7 +609,7 @@ function getCostForRow(row) {
 }
 
 function findIngredient(id) {
-  return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || null;
+  return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || recipes.find(r => r.recipeType === 'barprep' && r.id === id) || null;
 }
 
 // ─── NEW / LOAD RECIPE ────────────────────────────────────────────────────────
@@ -919,7 +919,10 @@ function acSearch(idx, query) {
   const drop = document.getElementById(`ac-drop-${idx}`);
   if (!drop) return;
   const q = query.toLowerCase().trim();
-  const all = [...spirits, ...otherIngredients];
+  const bpItems = recipes.filter(r => r.recipeType === 'barprep' && r.costPerOz > 0).map(r => ({
+    id: r.id, brand: null, name: r.name, subcategory: 'Bar Prep', category: 'Bar Prep', costPerOz: r.costPerOz
+  }));
+  const all = [...spirits, ...otherIngredients, ...bpItems];
   const results = q.length < 1
     ? all.slice(0, 10)
     : all.filter(i => {
@@ -1388,6 +1391,11 @@ function renderBarPrepBuilder(r) {
             value="${esc(r.bpYield||'')}" oninput="updateField('bpYield',this.value)">
         </div>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" style="width:15px;height:15px;accent-color:var(--ink);cursor:pointer;" ${r.isHousePrep?'checked':''} onchange="updateField('isHousePrep',this.checked)">
+        <span style="font-size:13px;">House Prep</span>
+        <span style="font-size:12px;color:var(--ink-light);">— always prints on spec sheet regardless of active menu</span>
+      </label>
     </div>
 
     <!-- INGREDIENTS -->
@@ -1420,6 +1428,31 @@ function renderBarPrepBuilder(r) {
         oninput="updateField('summary',this.value)">${esc(r.summary||'')}</textarea>
     </div>
 
+    <!-- PRICING -->
+    <div class="card">
+      <div class="card-title">Pricing</div>
+      <div style="font-size:12px;color:var(--ink-light);margin-bottom:12px;">Set a cost per oz to enable COGS flow-through when this item is used in cocktail recipes.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+        <button id="bp-size-16" class="btn btn-sm ${r.flatBatchOz===16?'btn-primary':''}" onclick="setBPBatchSize(16)">16 oz (1 pt)</button>
+        <button id="bp-size-32" class="btn btn-sm ${r.flatBatchOz===32?'btn-primary':''}" onclick="setBPBatchSize(32)">32 oz (1 qt)</button>
+        <button id="bp-size-64" class="btn btn-sm ${r.flatBatchOz===64?'btn-primary':''}" onclick="setBPBatchSize(64)">64 oz (2 qt)</button>
+        <button id="bp-size-128" class="btn btn-sm ${r.flatBatchOz===128?'btn-primary':''}" onclick="setBPBatchSize(128)">128 oz (1 gal)</button>
+      </div>
+      <div class="form-grid-2" style="margin-bottom:10px;">
+        <div class="form-group">
+          <label class="form-label">Batch size (oz)</label>
+          <input type="number" class="form-input" id="bp-batch-oz" placeholder="e.g. 32" value="${r.flatBatchOz||''}" oninput="updateField('flatBatchOz',parseFloat(this.value)||null);updateBPCost()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Total batch cost ($)</label>
+          <input type="number" class="form-input" id="bp-flat-cost" placeholder="e.g. 12.50" step="0.01" value="${r.flatCostDollars||''}" oninput="updateField('flatCostDollars',parseFloat(this.value)||null);updateBPCost()">
+        </div>
+      </div>
+      <div id="bp-cost-display">
+        ${r.costPerOz ? `<div style="background:var(--green-dim);color:var(--green);padding:8px 12px;border-radius:var(--radius);font-family:var(--mono);font-size:12px;font-weight:500;"><i class="ti ti-check" style="font-size:12px;"></i> $${r.costPerOz.toFixed(3)}/oz — will appear in cocktail autocomplete</div>` : '<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;">Enter batch size and total cost to calculate cost per oz.</div>'}
+      </div>
+    </div>
+
     <!-- SAVE BAR -->
     <div style="display:flex;justify-content:space-between;align-items:center;padding-top:1rem;border-top:1px solid var(--border);">
       <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${r.id}')"><i class="ti ti-trash"></i> Delete</button>
@@ -1429,6 +1462,34 @@ function renderBarPrepBuilder(r) {
       </div>
     </div>
   </div>`;
+}
+
+function setBPBatchSize(oz) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.flatBatchOz = oz;
+  saveRecipes();
+  const input = document.getElementById('bp-batch-oz');
+  if (input) input.value = oz;
+  [16, 32, 64, 128].forEach(s => {
+    const btn = document.getElementById('bp-size-' + s);
+    if (btn) btn.className = 'btn btn-sm' + (s === oz ? ' btn-primary' : '');
+  });
+  updateBPCost();
+}
+
+function updateBPCost() {
+  const r = currentRecipe();
+  if (!r) return;
+  const oz = parseFloat(r.flatBatchOz) || 0;
+  const cost = parseFloat(r.flatCostDollars) || 0;
+  r.costPerOz = (oz > 0 && cost > 0) ? cost / oz : null;
+  saveRecipes();
+  const el = document.getElementById('bp-cost-display');
+  if (!el) return;
+  el.innerHTML = r.costPerOz
+    ? `<div style="background:var(--green-dim);color:var(--green);padding:8px 12px;border-radius:var(--radius);font-family:var(--mono);font-size:12px;font-weight:500;"><i class="ti ti-check" style="font-size:12px;"></i> $${r.costPerOz.toFixed(3)}/oz — will appear in cocktail autocomplete</div>`
+    : '<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;">Enter batch size and total cost to calculate cost per oz.</div>';
 }
 
 function renderBPIngRows(r) {
