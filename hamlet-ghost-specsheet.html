@@ -6,7 +6,6 @@
 <title>Hamlet & Ghost — Spec Sheet Export</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,300&family=EB+Garamond:ital,wght@0,400;0,500;0,700;1,400&family=Inter:wght@300;400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
-<style id="spec-dynamic-styles"></style>
 <style>
   :root {
     --ink: #1a1812; --ink-mid: #4a4640; --ink-light: #8a8680; --ink-ghost: #c8c4bc;
@@ -221,6 +220,7 @@
     .spec-page + .spec-page { border-top: none; }
   }
 </style>
+<style id="spec-dynamic-styles"></style>
 </head>
 <body>
 
@@ -312,56 +312,60 @@
           </select>
         </div>
 
-        <div style="font-size:10px;color:var(--ink-light);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px;display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;">
-          <span></span><span>Size</span><span>Weight</span><span></span><span>Case</span>
+        <div style="margin-bottom:9px;">
+          <div style="font-size:11px;font-weight:500;margin-bottom:3px;">Name</div>
+          <div style="display:grid;grid-template-columns:46px 1fr 24px 1fr;gap:4px;align-items:center;">
+            <input type="number" id="st-name-size" min="8" max="36" step="0.5" onchange="updateStyle('nameFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;width:100%;">
+            <select id="st-name-weight" onchange="updateStyle('nameFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+            </select>
+            <input type="color" id="st-name-color" onchange="updateStyle('nameColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:24px;padding:2px;cursor:pointer;">
+            <select id="st-name-transform" onchange="updateStyle('nameTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+            </select>
+          </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:5px;">
-          <span style="font-size:11px;font-weight:500;">Name</span>
-          <input type="number" id="st-name-size" min="8" max="36" step="0.5" onchange="updateStyle('nameFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
-          <select id="st-name-weight" onchange="updateStyle('nameFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
-          </select>
-          <input type="color" id="st-name-color" onchange="updateStyle('nameColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
-          <select id="st-name-transform" onchange="updateStyle('nameTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
-          </select>
+        <div style="margin-bottom:9px;">
+          <div style="font-size:11px;font-weight:500;margin-bottom:3px;">Ingredients</div>
+          <div style="display:grid;grid-template-columns:46px 1fr 24px 1fr;gap:4px;align-items:center;">
+            <input type="number" id="st-ing-size" min="8" max="36" step="0.5" onchange="updateStyle('ingFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;width:100%;">
+            <select id="st-ing-weight" onchange="updateStyle('ingFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+            </select>
+            <input type="color" id="st-ing-color" onchange="updateStyle('ingColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:24px;padding:2px;cursor:pointer;">
+            <select id="st-ing-transform" onchange="updateStyle('ingTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+            </select>
+          </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:5px;">
-          <span style="font-size:11px;font-weight:500;">Ingreds.</span>
-          <input type="number" id="st-ing-size" min="8" max="36" step="0.5" onchange="updateStyle('ingFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
-          <select id="st-ing-weight" onchange="updateStyle('ingFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
-          </select>
-          <input type="color" id="st-ing-color" onchange="updateStyle('ingColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
-          <select id="st-ing-transform" onchange="updateStyle('ingTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
-          </select>
+        <div style="margin-bottom:9px;">
+          <div style="font-size:11px;font-weight:500;margin-bottom:3px;">Method</div>
+          <div style="display:grid;grid-template-columns:46px 1fr 24px 1fr;gap:4px;align-items:center;">
+            <input type="number" id="st-method-size" min="8" max="36" step="0.5" onchange="updateStyle('methodFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;width:100%;">
+            <select id="st-method-weight" onchange="updateStyle('methodFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+            </select>
+            <input type="color" id="st-method-color" onchange="updateStyle('methodColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:24px;padding:2px;cursor:pointer;">
+            <select id="st-method-transform" onchange="updateStyle('methodTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+            </select>
+          </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:5px;">
-          <span style="font-size:11px;font-weight:500;">Method</span>
-          <input type="number" id="st-method-size" min="8" max="36" step="0.5" onchange="updateStyle('methodFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
-          <select id="st-method-weight" onchange="updateStyle('methodFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
-          </select>
-          <input type="color" id="st-method-color" onchange="updateStyle('methodColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
-          <select id="st-method-transform" onchange="updateStyle('methodTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
-          </select>
-        </div>
-
-        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:10px;">
-          <span style="font-size:11px;font-weight:500;">Garnish</span>
-          <input type="number" id="st-garnish-size" min="8" max="36" step="0.5" onchange="updateStyle('garnishFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
-          <select id="st-garnish-weight" onchange="updateStyle('garnishFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
-          </select>
-          <input type="color" id="st-garnish-color" onchange="updateStyle('garnishColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
-          <select id="st-garnish-transform" onchange="updateStyle('garnishTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
-            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
-          </select>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:500;margin-bottom:3px;">Garnish</div>
+          <div style="display:grid;grid-template-columns:46px 1fr 24px 1fr;gap:4px;align-items:center;">
+            <input type="number" id="st-garnish-size" min="8" max="36" step="0.5" onchange="updateStyle('garnishFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;width:100%;">
+            <select id="st-garnish-weight" onchange="updateStyle('garnishFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+            </select>
+            <input type="color" id="st-garnish-color" onchange="updateStyle('garnishColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:24px;padding:2px;cursor:pointer;">
+            <select id="st-garnish-transform" onchange="updateStyle('garnishTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+            </select>
+          </div>
         </div>
 
         <div style="border-top:1px solid var(--border);padding-top:10px;">
