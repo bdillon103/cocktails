@@ -538,6 +538,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   // reload after seed
   const appData2 = await loadAppData();
   recipes = appData2.recipes || [];
+  spirits = appData2.spirits || [];
+  otherIngredients = appData2.otherIngredients || [];
   renderSidebar();
   updateSubtitle();
   // Auto-load recipe if coming from grid
