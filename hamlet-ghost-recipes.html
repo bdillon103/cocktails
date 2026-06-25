@@ -275,6 +275,46 @@
   </div>
 </div>
 
+<!-- ADD GLASS MODAL -->
+<div class="modal-overlay" id="glass-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add glass type</div>
+      <button class="icon-btn" onclick="closeModal('glass-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Glass name</label>
+        <input type="text" class="form-input" id="glass-name-input" placeholder="e.g. Tall Collins" onkeydown="if(event.key==='Enter')confirmAddGlass()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('glass-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddGlass()">Add glass type</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD FAMILY MODAL -->
+<div class="modal-overlay" id="family-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add cocktail family</div>
+      <button class="icon-btn" onclick="closeModal('family-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Family name</label>
+        <input type="text" class="form-input" id="family-name-input" placeholder="e.g. Spritz" onkeydown="if(event.key==='Enter')confirmAddFamily()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('family-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddFamily()">Add family</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -484,6 +524,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     const el = document.getElementById('nav-user');
     if (el) el.textContent = session.user.email;
   }
+  // Load persisted custom glass and family options
+  JSON.parse(localStorage.getItem('hg_custom_glasses') || '[]').forEach(g => { if (!GLASS_OPTIONS.includes(g)) GLASS_OPTIONS.push(g); });
+  JSON.parse(localStorage.getItem('hg_custom_families') || '[]').forEach(f => { if (!FAMILY_OPTIONS.includes(f)) FAMILY_OPTIONS.push(f); });
   const rs = localStorage.getItem('hg_recipes');
   const sp = localStorage.getItem('hg_spirits');
   const ot = localStorage.getItem('hg_other');
@@ -744,9 +787,10 @@ function renderBuilder(r) {
         </div>
         <div>
           <div class="form-label" style="margin-bottom:8px;">Cocktail family</div>
-          <select class="form-select" style="max-width:320px;" onchange="updateField('family',this.value)">
+          <select class="form-select" style="max-width:320px;" onchange="if(this.value==='__add_family__'){openFamilyModal();this.value=currentRecipe()?.family||'';}else{updateField('family',this.value);}">
             <option value="">— Select family —</option>
             ${FAMILY_OPTIONS.map(f => `<option value="${f}" ${r.family===f?'selected':''}>${f}</option>`).join('')}
+            <option value="__add_family__">+ Add family</option>
           </select>
         </div>
         <div style="margin-top:1rem;">
@@ -759,12 +803,11 @@ function renderBuilder(r) {
       <!-- BATCH CARD -->
       <div class="card">
         <div class="card-title">Batching</div>
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-          <div class="form-group" style="flex-direction:row;align-items:center;gap:10px;">
-            <label class="form-label" style="white-space:nowrap;margin-bottom:0;">Drinks per batch</label>
-            <input type="number" class="form-input" style="width:80px;" id="r-batchqty" value="${r.batchQty||1}" min="1" oninput="updateField('batchQty',parseInt(this.value)||1);renderBatchOutput()">
-          </div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <div class="pill ${(r.batchMode||'drinks')==='drinks'?'active':''}" onclick="setBatchMode('drinks')" style="font-size:11px;padding:4px 12px;">By drinks</div>
+          <div class="pill ${r.batchMode==='volume'?'active':''}" onclick="setBatchMode('volume')" style="font-size:11px;padding:4px 12px;">By volume</div>
         </div>
+        <div id="batch-mode-inputs" style="margin-bottom:10px;">${renderBatchModeInputs(r)}</div>
         <div id="batch-output"></div>
       </div>
 
@@ -1221,11 +1264,43 @@ function syncPriceInputs(price) {
 }
 
 // ─── BATCH OUTPUT ─────────────────────────────────────────────────────────────
+function renderBatchModeInputs(r) {
+  if ((r.batchMode || 'drinks') === 'drinks') {
+    return `<div style="display:flex;align-items:center;gap:10px;">
+      <label class="form-label" style="white-space:nowrap;margin-bottom:0;">Drinks per batch</label>
+      <input type="number" class="form-input" style="width:80px;" id="r-batchqty" value="${r.batchQty||1}" min="1" oninput="updateField('batchQty',parseInt(this.value)||1);renderBatchOutput()">
+    </div>`;
+  }
+  return `<div style="display:flex;align-items:center;gap:8px;">
+    <label class="form-label" style="white-space:nowrap;margin-bottom:0;">Target volume</label>
+    <input type="number" class="form-input" style="width:90px;" id="r-batchvol" placeholder="e.g. 64" value="${r.batchTargetOz||''}" min="0" step="0.5" oninput="updateField('batchTargetOz',parseFloat(this.value)||null);renderBatchOutput()">
+    <select class="form-select" style="width:76px;height:34px;" id="r-batchvolunit" onchange="updateField('batchVolUnit',this.value);renderBatchOutput()">
+      <option value="oz" ${(r.batchVolUnit||'oz')==='oz'?'selected':''}>oz</option>
+      <option value="ml" ${r.batchVolUnit==='ml'?'selected':''}>mL</option>
+    </select>
+  </div>`;
+}
+
+function setBatchMode(mode) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.batchMode = mode;
+  saveRecipes();
+  const el = document.getElementById('batch-mode-inputs');
+  if (el) el.innerHTML = renderBatchModeInputs(r);
+  document.querySelectorAll('.pill').forEach(p => {
+    const txt = p.textContent.trim();
+    if (txt === 'By drinks') p.classList.toggle('active', mode === 'drinks');
+    if (txt === 'By volume') p.classList.toggle('active', mode === 'volume');
+  });
+  renderBatchOutput();
+}
+
 function renderBatchOutput() {
   const r = currentRecipe();
   const el = document.getElementById('batch-output');
   if (!r || !el) return;
-  const qty = parseInt(r.batchQty) || 1;
+
   const rows = [];
   (r.ingredients || []).forEach(ing => {
     if (ing.isBatchGroup) {
@@ -1242,17 +1317,44 @@ function renderBatchOutput() {
     return;
   }
 
-  el.innerHTML = `<div style="font-size:12px;color:var(--ink-light);margin-bottom:8px;">Scaled to <strong style="color:var(--ink);">${qty} drinks</strong></div>
-  <div class="batch-output">
-    ${rows.map(row => {
-      const totalOz = row.unit === 'ml' ? (row.qty * qty / 29.5735) : row.qty * qty;
-      const totalMl = row.unit === 'ml' ? row.qty * qty : row.qty * qty * 29.5735;
-      return `<div class="batch-output-row">
-        <span class="batch-output-ing">${row.name}</span>
-        <span class="batch-output-vol">${totalOz.toFixed(1)} oz / ${Math.round(totalMl)} mL</span>
-      </div>`;
-    }).join('')}
-  </div>`;
+  let scaleFactor, headerText;
+
+  if ((r.batchMode || 'drinks') === 'drinks') {
+    scaleFactor = parseInt(r.batchQty) || 1;
+    headerText = 'Scaled to <strong style="color:var(--ink);">' + scaleFactor + ' drink' + (scaleFactor !== 1 ? 's' : '') + '</strong>';
+  } else {
+    const rawTarget = parseFloat(r.batchTargetOz) || 0;
+    const targetOz = r.batchVolUnit === 'ml' ? rawTarget / 29.5735 : rawTarget;
+    if (targetOz <= 0) {
+      el.innerHTML = `<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;">Enter a target volume above.</div>`;
+      return;
+    }
+    const singleServeOz = rows.reduce((sum, row) => {
+      if (row.unit === 'oz') return sum + row.qty;
+      if (row.unit === 'ml') return sum + row.qty / 29.5735;
+      return sum;
+    }, 0);
+    if (singleServeOz <= 0) {
+      el.innerHTML = `<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;">No oz/mL ingredients to scale from.</div>`;
+      return;
+    }
+    scaleFactor = targetOz / singleServeOz;
+    const displayOz = targetOz.toFixed(1);
+    const displayMl = Math.round(targetOz * 29.5735);
+    headerText = 'Scaled to <strong style="color:var(--ink);">' + displayOz + ' oz / ' + displayMl + ' mL</strong> <span style="color:var(--ink-light);font-size:11px;">(' + scaleFactor.toFixed(1) + '× single serve)</span>';
+  }
+
+  el.innerHTML = '<div style="font-size:12px;color:var(--ink-light);margin-bottom:8px;">' + headerText + '</div>' +
+    '<div class="batch-output">' +
+    rows.map(row => {
+      if (row.unit === 'oz' || row.unit === 'ml') {
+        const totalOz = row.unit === 'ml' ? row.qty * scaleFactor / 29.5735 : row.qty * scaleFactor;
+        const totalMl = row.unit === 'ml' ? row.qty * scaleFactor : row.qty * scaleFactor * 29.5735;
+        return '<div class="batch-output-row"><span class="batch-output-ing">' + row.name + '</span><span class="batch-output-vol">' + totalOz.toFixed(1) + ' oz / ' + Math.round(totalMl) + ' mL</span></div>';
+      }
+      return '<div class="batch-output-row"><span class="batch-output-ing">' + row.name + '</span><span class="batch-output-vol">' + (row.qty * scaleFactor).toFixed(1) + ' ' + row.unit + '</span></div>';
+    }).join('') +
+    '</div>';
 }
 
 // ─── FIELD UPDATES ────────────────────────────────────────────────────────────
@@ -1279,21 +1381,66 @@ function attachGlassListener() {
   if (!sel) return;
   sel.addEventListener('change', () => {
     if (sel.value === '__custom__') {
-      const name = prompt('New glass type name:');
-      if (name && name.trim()) {
-        GLASS_OPTIONS.push(name.trim());
-        const opt = document.createElement('option');
-        opt.value = name.trim();
-        opt.textContent = name.trim();
-        sel.insertBefore(opt, sel.querySelector('[value="__custom__"]'));
-        sel.value = name.trim();
-        updateField('glass', name.trim());
-        showToast(`✓ Added glass type: ${name.trim()}`);
-      } else {
-        sel.value = currentRecipe()?.glass || GLASS_OPTIONS[0];
-      }
+      sel.value = currentRecipe()?.glass || GLASS_OPTIONS[0];
+      openGlassModal();
     }
   });
+}
+
+function openGlassModal() {
+  document.getElementById('glass-name-input').value = '';
+  document.getElementById('glass-modal').classList.add('open');
+  setTimeout(() => document.getElementById('glass-name-input').focus(), 50);
+}
+
+function confirmAddGlass() {
+  const name = document.getElementById('glass-name-input').value.trim();
+  if (!name) { showToast('Enter a glass name'); return; }
+  if (!GLASS_OPTIONS.includes(name)) {
+    GLASS_OPTIONS.push(name);
+    const custom = JSON.parse(localStorage.getItem('hg_custom_glasses') || '[]');
+    if (!custom.includes(name)) { custom.push(name); localStorage.setItem('hg_custom_glasses', JSON.stringify(custom)); }
+  }
+  const sel = document.getElementById('r-glass');
+  if (sel && !sel.querySelector('[value="' + name + '"]')) {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    sel.insertBefore(opt, sel.querySelector('[value="__custom__"]'));
+  }
+  if (sel) sel.value = name;
+  updateField('glass', name);
+  closeModal('glass-modal');
+  showToast('✓ Added glass type: ' + name);
+}
+
+function openFamilyModal() {
+  document.getElementById('family-name-input').value = '';
+  document.getElementById('family-modal').classList.add('open');
+  setTimeout(() => document.getElementById('family-name-input').focus(), 50);
+}
+
+function confirmAddFamily() {
+  const name = document.getElementById('family-name-input').value.trim();
+  if (!name) { showToast('Enter a family name'); return; }
+  if (!FAMILY_OPTIONS.includes(name)) {
+    FAMILY_OPTIONS.push(name);
+    const custom = JSON.parse(localStorage.getItem('hg_custom_families') || '[]');
+    if (!custom.includes(name)) { custom.push(name); localStorage.setItem('hg_custom_families', JSON.stringify(custom)); }
+  }
+  const r = currentRecipe();
+  if (r) { updateField('family', name); }
+  closeModal('family-modal');
+  // Re-render style card to show new option selected
+  const sel = document.querySelector('select[onchange*="family"]');
+  if (sel) {
+    if (!sel.querySelector('[value="' + name + '"]')) {
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      sel.insertBefore(opt, sel.querySelector('[value="__add_family__"]'));
+    }
+    sel.value = name;
+  }
+  showToast('✓ Added cocktail family: ' + name);
 }
 
 // ─── SAVE / DUPLICATE / DELETE ────────────────────────────────────────────────
