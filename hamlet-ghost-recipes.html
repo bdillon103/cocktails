@@ -103,6 +103,7 @@
   .ing-cost-cell.no-cost { color: var(--accent); }
   .no-price-pill { display: inline-flex; align-items: center; gap: 3px; background: var(--accent-dim); color: var(--accent); padding: 1px 6px; border-radius: 10px; font-family: var(--mono); font-size: 10px; }
   .neg-pill { color: var(--ink-ghost); font-family: var(--mono); font-size: 11px; font-style: italic; }
+  .unlinked-pill { color: var(--ink-ghost); font-family: var(--mono); font-size: 10px; font-style: italic; }
 
   /* BATCH GROUP */
   .batch-group { border: 1px solid rgba(184,134,11,0.35); border-radius: var(--radius); background: var(--gold-dim); margin-bottom: 6px; overflow: hidden; }
@@ -861,7 +862,9 @@ function renderSingleRow(ing, idx) {
       ? `<span class="ing-cost-cell has-cost">$${cost.toFixed(3)}</span>`
       : ing.ingredientId
         ? `<span class="no-price-pill"><i class="ti ti-alert-triangle" style="font-size:10px;"></i> ?</span>`
-        : `<span class="ing-cost-cell">—</span>`;
+        : ing.ingredientName
+          ? `<span class="unlinked-pill">free</span>`
+          : `<span class="ing-cost-cell">—</span>`;
 
   return `<div class="ing-row" id="row-${idx}" data-idx="${idx}">
     <input type="number" class="form-input ing-qty" style="height:30px;font-size:12px;font-family:var(--mono);text-align:center;" value="${ing.qty||''}" placeholder="0" min="0" step="0.25" oninput="updateIngField(${idx},'qty',this.value);updateCosting()">
@@ -869,7 +872,7 @@ function renderSingleRow(ing, idx) {
       ${UNIT_OPTIONS.map(u => `<option value="${u}" ${ing.unit===u?'selected':''}>${u}</option>`).join('')}
     </select>
     <div class="ac-wrap">
-      <input type="text" class="form-input" style="height:30px;font-size:12px;" placeholder="Search ingredients..." value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
+      <input type="text" class="form-input" style="height:30px;font-size:12px;" placeholder="Search ingredients..." value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onblur="acBlur(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
       <div class="ac-dropdown" id="ac-drop-${idx}" style="display:none;"></div>
     </div>
     <div style="text-align:right;padding-right:4px;">${costHTML}</div>
@@ -987,6 +990,23 @@ function acSearch(idx, query) {
   }).join('');
 }
 
+function acBlur(idx, val) {
+  // Delay so mousedown on a dropdown item (selectIngredient) fires first
+  setTimeout(function() {
+    const r = currentRecipe();
+    if (!r || !r.ingredients[idx]) return;
+    // If selectIngredient already ran, ingredientId is set — don't overwrite
+    if (r.ingredients[idx].ingredientId) return;
+    const trimmed = val.trim();
+    if (r.ingredients[idx].ingredientName === trimmed) return;
+    r.ingredients[idx].ingredientName = trimmed;
+    // Clear any stale ingredientId if name was manually cleared
+    if (!trimmed) r.ingredients[idx].ingredientId = null;
+    saveRecipes();
+    refreshCostCells();
+  }, 150);
+}
+
 function acKeyNav(e, idx) {
   const drop = document.getElementById(`ac-drop-${idx}`);
   if (!drop || drop.style.display === 'none') return;
@@ -1033,7 +1053,9 @@ function refreshCostCells() {
         ? `<span class="ing-cost-cell has-cost">$${cost.toFixed(3)}</span>`
         : ing.ingredientId
           ? `<span class="no-price-pill"><i class="ti ti-alert-triangle" style="font-size:10px;"></i> ?</span>`
-          : `<span class="ing-cost-cell">—</span>`;
+          : ing.ingredientName
+            ? `<span class="unlinked-pill">free</span>`
+            : `<span class="ing-cost-cell">—</span>`;
   });
 }
 
