@@ -24,7 +24,7 @@
   .nav-brand { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--parchment); letter-spacing: 0.08em; text-transform: uppercase; margin-right: 2rem; white-space: nowrap; }
   .nav-brand span { color: var(--accent); }
   .nav-links { display: flex; gap: 0; flex: 1; }
-  .nav-link { font-family: var(--mono); font-size: 11px; color: var(--ink-ghost); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 1rem; height: 52px; display: flex; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; white-space: nowrap; }
+  .nav-link { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink-ghost); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 1rem; height: 52px; display: flex; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; white-space: nowrap; }
   .nav-link:hover { color: var(--parchment); }
   .nav-link.active { color: var(--parchment); border-bottom-color: var(--accent); }
 
@@ -92,7 +92,7 @@
 
   /* INGREDIENT ROWS */
   .ing-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-  .ing-row { display: grid; grid-template-columns: 60px 90px 1fr 70px 28px; gap: 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border: 1px solid transparent; transition: background 0.1s, border-color 0.1s; }
+  .ing-row { display: grid; grid-template-columns: 72px 90px 1fr 70px 28px; gap: 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border: 1px solid transparent; transition: background 0.1s, border-color 0.1s; }
   .ing-row:hover { background: var(--parchment); }
   .ing-row.selected { background: var(--blue-dim); border-color: rgba(26,74,122,0.2); }
   .ing-row.batched { background: var(--gold-dim); border-color: rgba(184,134,11,0.2); }
@@ -110,7 +110,7 @@
   .batch-group-name { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--gold); letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; }
   .batch-group-cost { font-family: var(--mono); font-size: 11px; color: var(--gold); }
   .batch-children { padding: 4px 6px; display: flex; flex-direction: column; gap: 3px; }
-  .batch-child-row { display: grid; grid-template-columns: 60px 90px 1fr 70px; gap: 6px; align-items: center; padding: 3px 4px; opacity: 0.8; }
+  .batch-child-row { display: grid; grid-template-columns: 72px 90px 1fr 70px; gap: 6px; align-items: center; padding: 3px 4px; opacity: 0.8; }
   .batch-child-label { font-size: 11px; color: var(--ink-mid); }
 
   /* GROUP BUTTON BANNER */
@@ -473,7 +473,7 @@ const ICE_OPTIONS = ['Rocks','Big Cube','Collins Cube','Crushed','No Ice'];
 const FLAVOR_OPTIONS = ['Citrusy','Boozy','Bitter','Herbal','Sweet','Smoky','Savory','Tropical','Floral','Spicy'];
 const STYLE_OPTIONS = ['Stirred','Shaken','Built','Carbonated','Frozen'];
 const FAMILY_OPTIONS = ['Old Fashioned Family','Manhattan Family','Martini Family','Negroni Family','Classic Sour','Egg White / Foam Sour','Collins','Fizz','Highball','Aperitivo Style','Digestivo / Black Manhattan Style','Classic Tiki','Modern Tropical','Cream / Dessert Cocktails','Hot Cocktails','Savory / Culinary Cocktails','Carbonated Cocktails','Clarified Cocktails','Frozen Cocktails','Zero-Proof Cocktails'];
-const UNIT_OPTIONS = ['oz','ml','dash','barspoon','rinse','whole','tsp','tbsp'];
+const UNIT_OPTIONS = ['oz','ml','dash','barspoon','rinse','whole','tsp','tbsp','drops'];
 const NEGLIGIBLE_UNITS = ['dash','barspoon','rinse'];
 
 // ─── LOAD ─────────────────────────────────────────────────────────────────────
@@ -709,7 +709,7 @@ function renderBuilder(r) {
           </div>
         </div>
         <div style="margin-top:10px;">
-          <div style="display:grid;grid-template-columns:60px 90px 1fr 70px 28px;gap:6px;padding:0 8px 6px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-ghost);">
+          <div style="display:grid;grid-template-columns:72px 90px 1fr 70px 28px;gap:6px;padding:0 8px 6px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-ghost);">
             <span>Qty</span><span>Unit</span><span>Ingredient</span><span style="text-align:right;">Cost</span><span></span>
           </div>
           <div class="ing-rows" id="ing-rows">
@@ -748,6 +748,11 @@ function renderBuilder(r) {
             <option value="">— Select family —</option>
             ${FAMILY_OPTIONS.map(f => `<option value="${f}" ${r.family===f?'selected':''}>${f}</option>`).join('')}
           </select>
+        </div>
+        <div style="margin-top:1rem;">
+          <div class="form-label" style="margin-bottom:5px;">Method notes</div>
+          <input type="text" class="form-input" placeholder="e.g. omit lemon if force carbonated" value="${esc(r.methodNotes||'')}" oninput="updateField('methodNotes',this.value)">
+          <div style="font-size:11px;color:var(--ink-light);margin-top:4px;">Appended to method line on spec sheet with a dash.</div>
         </div>
       </div>
 
@@ -1164,7 +1169,7 @@ function updateCosting() {
     </div>
     <input type="range" min="8" max="40" step="0.5" value="${menuPrice||16}" id="price-slider" oninput="updateMenuPriceSlider(this.value)" style="width:100%;accent-color:var(--ink);margin-bottom:6px;">
     <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--ink-ghost);margin-bottom:8px;"><span>$8</span><span>$40</span></div>
-    ${suggestedPrice !== null ? `<div style="font-size:11px;color:var(--ink-light);padding:7px 10px;background:var(--parchment);border-radius:var(--radius);border:1px solid var(--border);">To hit ${target}%: <strong style="color:var(--ink);">$\${suggestedPrice.toFixed(2)}</strong></div>` : ''}
+    ${suggestedPrice !== null ? '<div style="font-size:11px;color:var(--ink-light);padding:7px 10px;background:var(--parchment);border-radius:var(--radius);border:1px solid var(--border);">To hit ' + target + '%: <strong style="color:var(--ink);">$' + suggestedPrice.toFixed(2) + '</strong></div>' : ''}
 
     ${unpriced.length > 0 ? `
     <div class="divider"></div>
