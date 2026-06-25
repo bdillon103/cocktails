@@ -351,7 +351,7 @@ let spirits = [];
 let otherIngredients = [];
 let menus = [];
 let activeMenu = null;
-let cogsTarget = 20;
+let cogsTarget = parseFloat(localStorage.getItem('hg_cogs_target')) || 20;
 let salesData = {};       // { recipeId: count }
 let expandedSections = {};
 const NEGLIGIBLE = ['dash','barspoon','rinse'];
@@ -583,7 +583,7 @@ function renderCOGSSlider() {
     <div class="card-title">Global COGS target</div>
     <div class="slider-wrap">
       <span class="slider-label">Target %</span>
-      <input type="range" min="10" max="35" step="0.5" value="${cogsTarget}" oninput="cogsTarget=parseFloat(this.value);document.getElementById('cogs-val').textContent=cogsTarget+'%';renderAll()">
+      <input type="range" min="10" max="35" step="0.5" value="${cogsTarget}" oninput="cogsTarget=parseFloat(this.value);localStorage.setItem('hg_cogs_target',cogsTarget);document.getElementById('cogs-val').textContent=cogsTarget+'%';renderAll()">
       <span class="slider-val" id="cogs-val">${cogsTarget}%</span>
     </div>
     <div style="font-size:12px;color:var(--ink-light);margin-bottom:${suggestions.length>0?'1rem':'0'};">Adjusting this recalculates status across all drinks and updates suggested prices.</div>
