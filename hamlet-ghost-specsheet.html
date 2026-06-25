@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hamlet & Ghost — Spec Sheet Export</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,300&family=EB+Garamond:ital,wght@0,400;0,500;0,700;1,400&family=Inter:wght@300;400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style id="spec-dynamic-styles"></style>
 <style>
   :root {
     --ink: #1a1812; --ink-mid: #4a4640; --ink-light: #8a8680; --ink-ghost: #c8c4bc;
@@ -286,6 +287,98 @@
           </label>
         </div>
       </div>
+
+      <div class="card" id="style-card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+          Style
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select id="style-preset-select" onchange="loadStylePreset(this.value)" style="font-family:var(--mono);font-size:10px;letter-spacing:0.04em;height:26px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);color:var(--ink);padding:0 4px;max-width:110px;">
+              <option value="">Load preset…</option>
+            </select>
+            <button onclick="saveStylePreset()" class="btn" style="height:26px;padding:0 8px;font-size:10px;">Save</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <div style="font-size:10px;color:var(--ink-light);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px;">Font family</div>
+          <select id="st-font-family" onchange="updateStyle('fontFamily',this.value)" style="width:100%;height:30px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);color:var(--ink);font-size:12px;padding:0 6px;">
+            <option value="DM Sans">DM Sans</option>
+            <option value="DM Mono">DM Mono</option>
+            <option value="Inter">Inter</option>
+            <option value="EB Garamond">EB Garamond</option>
+            <option value="Playfair Display">Playfair Display</option>
+            <option value="Libre Baskerville">Libre Baskerville</option>
+            <option value="Courier Prime">Courier Prime</option>
+          </select>
+        </div>
+
+        <div style="font-size:10px;color:var(--ink-light);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px;display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;">
+          <span></span><span>Size</span><span>Weight</span><span></span><span>Case</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:5px;">
+          <span style="font-size:11px;font-weight:500;">Name</span>
+          <input type="number" id="st-name-size" min="8" max="36" step="0.5" onchange="updateStyle('nameFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
+          <select id="st-name-weight" onchange="updateStyle('nameFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+          </select>
+          <input type="color" id="st-name-color" onchange="updateStyle('nameColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
+          <select id="st-name-transform" onchange="updateStyle('nameTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:5px;">
+          <span style="font-size:11px;font-weight:500;">Ingreds.</span>
+          <input type="number" id="st-ing-size" min="8" max="36" step="0.5" onchange="updateStyle('ingFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
+          <select id="st-ing-weight" onchange="updateStyle('ingFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+          </select>
+          <input type="color" id="st-ing-color" onchange="updateStyle('ingColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
+          <select id="st-ing-transform" onchange="updateStyle('ingTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:5px;">
+          <span style="font-size:11px;font-weight:500;">Method</span>
+          <input type="number" id="st-method-size" min="8" max="36" step="0.5" onchange="updateStyle('methodFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
+          <select id="st-method-weight" onchange="updateStyle('methodFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+          </select>
+          <input type="color" id="st-method-color" onchange="updateStyle('methodColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
+          <select id="st-method-transform" onchange="updateStyle('methodTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:62px 38px 1fr 26px 1fr;gap:3px;align-items:center;margin-bottom:10px;">
+          <span style="font-size:11px;font-weight:500;">Garnish</span>
+          <input type="number" id="st-garnish-size" min="8" max="36" step="0.5" onchange="updateStyle('garnishFontSize',+this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;width:100%;">
+          <select id="st-garnish-weight" onchange="updateStyle('garnishFontWeight',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="300">Light</option><option value="400">Normal</option><option value="500">Medium</option><option value="700">Bold</option>
+          </select>
+          <input type="color" id="st-garnish-color" onchange="updateStyle('garnishColor',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;width:26px;padding:2px;cursor:pointer;">
+          <select id="st-garnish-transform" onchange="updateStyle('garnishTransform',this.value)" style="height:27px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 3px;">
+            <option value="none">None</option><option value="capitalize">Title</option><option value="uppercase">CAPS</option><option value="lowercase">lower</option>
+          </select>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:10px;">
+          <div style="font-size:10px;color:var(--ink-light);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Layout</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div style="display:flex;gap:4px;">
+              <button id="st-col-1" onclick="updateStyle('columns',1)" class="btn" style="height:26px;padding:0 10px;font-size:10px;">1 col</button>
+              <button id="st-col-2" onclick="updateStyle('columns',2)" class="btn" style="height:26px;padding:0 10px;font-size:10px;">2 col</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="font-size:11px;color:var(--ink-light);">Spacing</span>
+              <input type="number" id="st-spacing" min="4" max="60" onchange="updateStyle('recipeSpacing',+this.value)" style="height:26px;width:44px;border:1px solid var(--border-mid);border-radius:4px;background:var(--parchment);font-size:11px;padding:0 4px;">
+              <span style="font-size:10px;color:var(--ink-light);">px</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- PREVIEW -->
@@ -498,6 +591,18 @@ let menus = [];
 let sections = [];
 const NEGLIGIBLE = ['dash','barspoon','rinse'];
 
+const DEFAULT_STYLE_CONFIG = {
+  fontFamily: 'DM Sans',
+  nameFontSize: 17, nameFontWeight: '700', nameColor: '#1a1812', nameTransform: 'capitalize',
+  ingFontSize: 15, ingFontWeight: '400', ingColor: '#1a1812', ingTransform: 'capitalize',
+  methodFontSize: 15, methodFontWeight: '700', methodColor: '#4a4640', methodTransform: 'capitalize',
+  garnishFontSize: 15, garnishFontWeight: '700', garnishColor: '#38761d', garnishTransform: 'capitalize',
+  columns: 2,
+  recipeSpacing: 20
+};
+let styleConfig = JSON.parse(localStorage.getItem('hg_spec_style') || 'null') || Object.assign({}, DEFAULT_STYLE_CONFIG);
+let specStylePresets = [];
+
 // Default sections
 const DEFAULT_SECTIONS = [
   { id: 'cocktail-menu',    label: 'Cocktail Menu',         visible: true },
@@ -514,6 +619,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (el) el.textContent = session.user.email;
   }
   await loadData();
+  refreshDynamicStyles();
+  renderStylePanel();
   buildSections();
   renderSectionList();
   refreshPreview();
@@ -525,6 +632,8 @@ async function loadData() {
   otherIngredients = data.otherIngredients || [];
   allRecipes = data.recipes || [];
   menus = data.menus || [];
+  specStylePresets = data.specStylePresets || [];
+  renderPresetList();
 
   activeMenu = menus.find(m => m.isActive) || menus[0] || null;
 
@@ -723,6 +832,113 @@ function formatQty(qty, unit) {
 
 // skull SVG replaced with real image
 
+// ─── STYLE PANEL ─────────────────────────────────────────────────────────────
+function buildSpecDynamicCSS() {
+  const fontMap = {
+    'DM Sans': "'DM Sans',sans-serif",
+    'DM Mono': "'DM Mono',monospace",
+    'Inter': "'Inter',sans-serif",
+    'EB Garamond': "'EB Garamond',serif",
+    'Playfair Display': "'Playfair Display',serif",
+    'Libre Baskerville': "'Libre Baskerville',serif",
+    'Courier Prime': "'Courier Prime',monospace"
+  };
+  const ff = fontMap[styleConfig.fontFamily] || "'DM Sans',sans-serif";
+  return '.spec-wrap{font-family:' + ff + ';}'
+    + '.recipe-name{font-size:' + styleConfig.nameFontSize + 'px;font-weight:' + styleConfig.nameFontWeight + ';color:' + styleConfig.nameColor + ';text-transform:' + styleConfig.nameTransform + ';}'
+    + '.recipe-ingredients li{font-size:' + styleConfig.ingFontSize + 'px;font-weight:' + styleConfig.ingFontWeight + ';color:' + styleConfig.ingColor + ';text-transform:' + styleConfig.ingTransform + ';}'
+    + '.recipe-method{font-size:' + styleConfig.methodFontSize + 'px;font-weight:' + styleConfig.methodFontWeight + ';color:' + styleConfig.methodColor + ';text-transform:' + styleConfig.methodTransform + ';}'
+    + '.recipe-garnish{font-size:' + styleConfig.garnishFontSize + 'px;font-weight:' + styleConfig.garnishFontWeight + ';color:' + styleConfig.garnishColor + ';text-transform:' + styleConfig.garnishTransform + ';}'
+    + '.recipe-columns{columns:' + styleConfig.columns + ';}'
+    + '.recipe-block{margin-bottom:' + styleConfig.recipeSpacing + 'px;}';
+}
+
+function refreshDynamicStyles() {
+  const el = document.getElementById('spec-dynamic-styles');
+  if (el) el.textContent = buildSpecDynamicCSS();
+}
+
+function updateStyle(key, val) {
+  styleConfig[key] = val;
+  localStorage.setItem('hg_spec_style', JSON.stringify(styleConfig));
+  refreshDynamicStyles();
+  renderStylePanel();
+  refreshPreview();
+}
+
+function renderStylePanel() {
+  const fields = {
+    'st-font-family': styleConfig.fontFamily,
+    'st-name-size': styleConfig.nameFontSize,
+    'st-name-weight': styleConfig.nameFontWeight,
+    'st-name-color': styleConfig.nameColor,
+    'st-name-transform': styleConfig.nameTransform,
+    'st-ing-size': styleConfig.ingFontSize,
+    'st-ing-weight': styleConfig.ingFontWeight,
+    'st-ing-color': styleConfig.ingColor,
+    'st-ing-transform': styleConfig.ingTransform,
+    'st-method-size': styleConfig.methodFontSize,
+    'st-method-weight': styleConfig.methodFontWeight,
+    'st-method-color': styleConfig.methodColor,
+    'st-method-transform': styleConfig.methodTransform,
+    'st-garnish-size': styleConfig.garnishFontSize,
+    'st-garnish-weight': styleConfig.garnishFontWeight,
+    'st-garnish-color': styleConfig.garnishColor,
+    'st-garnish-transform': styleConfig.garnishTransform,
+    'st-spacing': styleConfig.recipeSpacing
+  };
+  Object.keys(fields).forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = fields[id];
+  });
+  const c1 = document.getElementById('st-col-1');
+  const c2 = document.getElementById('st-col-2');
+  if (c1 && c2) {
+    c1.className = styleConfig.columns === 1 ? 'btn btn-primary' : 'btn';
+    c2.className = styleConfig.columns === 2 ? 'btn btn-primary' : 'btn';
+    c1.style.cssText = 'height:26px;padding:0 10px;font-size:10px;';
+    c2.style.cssText = 'height:26px;padding:0 10px;font-size:10px;';
+  }
+}
+
+function renderPresetList() {
+  const sel = document.getElementById('style-preset-select');
+  if (!sel) return;
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">Load preset…</option>';
+  specStylePresets.forEach(function(p) {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name;
+    if (p.id === curVal) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+async function saveStylePreset() {
+  const name = prompt('Preset name:');
+  if (!name || !name.trim()) return;
+  const id = 'sp_' + Date.now();
+  specStylePresets.push({ id: id, name: name.trim(), config: Object.assign({}, styleConfig) });
+  const data = await loadAppData();
+  data.specStylePresets = specStylePresets;
+  await saveAppData(data);
+  renderPresetList();
+  showToast('Preset saved: ' + name.trim());
+}
+
+function loadStylePreset(id) {
+  if (!id) return;
+  const preset = specStylePresets.find(function(p) { return p.id === id; });
+  if (!preset) return;
+  styleConfig = Object.assign({}, DEFAULT_STYLE_CONFIG, preset.config);
+  localStorage.setItem('hg_spec_style', JSON.stringify(styleConfig));
+  refreshDynamicStyles();
+  renderStylePanel();
+  refreshPreview();
+  showToast('Loaded: ' + preset.name);
+}
+
 // ─── PREVIEW / PRINT ─────────────────────────────────────────────────────────
 function refreshPreview() {
   const content = document.getElementById('preview-content');
@@ -733,10 +949,13 @@ function refreshPreview() {
 function printSpec() {
   const html = renderSpecSheet(true);
   const printWin = window.open('', '_blank');
+  const FONTS_URL = 'https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,300&family=EB+Garamond:ital,wght@0,400;0,500;0,700;1,400&family=Inter:wght@300;400;500;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,700;1,400&display=swap';
+  const dynamicCSS = buildSpecDynamicCSS();
+  const menuName = activeMenu?.name || 'Spec Sheet';
   printWin.document.write(`<!DOCTYPE html><html><head>
     <meta charset="UTF-8">
-    <title>Hamlet & Ghost — ${activeMenu?.name || 'Spec Sheet'}</title>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+    <title>Hamlet &amp; Ghost — ${menuName}</title>
+    <link href="${FONTS_URL}" rel="stylesheet">
     <style>
       *{box-sizing:border-box;margin:0;padding:0;}
       body{font-family:'DM Sans',sans-serif;color:#1a1812;background:white;}
@@ -766,6 +985,7 @@ function printSpec() {
       .prep-notes{font-size:10.5px;color:#4a4640;font-style:italic;margin-top:4px;line-height:1.5;}
       .prep-divider{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#c8c4bc;margin:12px 0 8px;padding-bottom:3px;border-bottom:0.5px dashed #c8c4bc;}
       @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}@page{size:letter;margin:0;}}
+      ${dynamicCSS}
     </style>
   </head><body>${html}</body></html>`);
   printWin.document.close();
