@@ -26,7 +26,7 @@
   .nav-brand { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--parchment); letter-spacing: 0.08em; text-transform: uppercase; margin-right: 2rem; white-space: nowrap; }
   .nav-brand span { color: var(--accent); }
   .nav-links { display: flex; flex: 1; }
-  .nav-link { font-family: var(--mono); font-size: 11px; color: var(--ink-ghost); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 1rem; height: 52px; display: flex; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; white-space: nowrap; text-decoration: none; }
+  .nav-link { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink-ghost); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 1rem; height: 52px; display: flex; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; white-space: nowrap; text-decoration: none; }
   .nav-link:hover { color: var(--parchment); }
   .nav-link.active { color: var(--parchment); border-bottom-color: var(--accent); }
 
@@ -693,7 +693,7 @@ function renderAssignedList(assignedRecipes) {
             <div class="assigned-name">${esc(r.name||'Untitled')}</div>
             <div class="assigned-meta">${r.style||'—'} · ${r.glass||'—'} · ${r.ice||'—'}</div>
           </div>
-          <span class="section-tag" onclick="openSectionModal('${a.id}')" title="Change section">${esc(a.section||'Cocktail Menu')}</span>
+          <span class="section-tag" onclick="openSectionModal('${a.id}')" title="Change section">${esc(a.section||'Cocktail Menu')} <i class="ti ti-chevron-down" style="font-size:9px;vertical-align:1px;"></i></span>
           <div style="display:flex;align-items:center;gap:8px;margin-left:8px;">
             <span class="assigned-cost" style="color:${pcColor(pc)};">${pc!==null?pc.toFixed(1)+'%':'—'}</span>
             <span style="font-family:var(--mono);font-size:11px;color:var(--ink-light);">${r.menuPrice?'$'+r.menuPrice.toFixed(2):'—'}</span>
