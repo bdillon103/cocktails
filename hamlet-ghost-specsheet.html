@@ -135,14 +135,13 @@
     line-height: 1.65;
     color: #1a1812;
     display: flex;
+    align-items: baseline;
     gap: 6px;
   }
   .ing-qty-label {
-    font-size: 11px;
-    color: var(--ink-mid);
     min-width: 28px;
     flex-shrink: 0;
-    text-align: right;
+    text-align: left;
   }
   .recipe-method {
     font-size: 11px;
@@ -824,13 +823,14 @@ function formatQty(qty, unit) {
   const n = parseFloat(qty);
   if (!n) return '';
   const u = unit || 'oz';
-  if (u === 'dash') return `${n} dash${n !== 1 ? 'es' : ''}`;
-  if (u === 'barspoon') return `${n} barspoon${n !== 1 ? 's' : ''}`;
-  if (u === 'whole') return `${n}`;
+  const s = n < 1 ? n.toString().replace('0.', '.') : n.toString();
+  if (u === 'dash') return `${s} dash${n !== 1 ? 'es' : ''}`;
+  if (u === 'barspoon') return `${s} barspoon${n !== 1 ? 's' : ''}`;
+  if (u === 'whole') return s;
   if (u === 'rinse') return 'rinse';
-  if (u === 'ml') return `${n} ml`;
-  if (u === 'oz') return n.toString();
-  return `${n} ${u}`;
+  if (u === 'ml') return `${s} ml`;
+  if (u === 'oz') return s;
+  return `${s} ${u}`;
 }
 
 // skull SVG replaced with real image
@@ -975,8 +975,8 @@ function printSpec() {
       .recipe-block{break-inside:avoid;margin-bottom:20px;}
       .recipe-name{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;letter-spacing:0.02em;margin-bottom:4px;text-transform:uppercase;}
       .recipe-ingredients{list-style:none;margin-bottom:5px;}
-      .recipe-ingredients li{font-size:11.5px;line-height:1.65;display:flex;gap:6px;}
-      .ing-qty-label{font-size:11px;color:#4a4640;min-width:28px;flex-shrink:0;text-align:right;}
+      .recipe-ingredients li{font-size:11.5px;line-height:1.65;display:flex;align-items:baseline;gap:6px;}
+      .ing-qty-label{min-width:28px;flex-shrink:0;text-align:left;}
       .recipe-method{font-size:11px;color:#4a4640;font-style:italic;margin-bottom:2px;}
       .recipe-garnish{font-size:11px;color:#8a8680;}
       .recipe-batch-note{font-size:10px;font-family:'DM Mono',monospace;color:#c8392b;margin-top:2px;}
