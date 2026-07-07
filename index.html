@@ -1097,6 +1097,8 @@ let spirits = [];
 let otherIngredients = [];
 let deletedSpiritIds = new Set();
 let deletedOtherIngredientIds = new Set();
+let spiritSnapshots = new Map();          // id -> JSON at last load/save
+let otherSnapshots = new Map();           // detects this session's own edits
 let filteredSpirits = [];
 let currentTab = 'spirits';
 let currentPage = 1;
@@ -1110,29 +1112,98 @@ let importMeta = null;
 const EXCLUDED_CATEGORIES = ['Beer', 'Wine', 'Wine By The Glass', 'Accessory'];
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
-function mergeById(freshList, localList, deletedIds) {
-  const localById = new Map(localList.map(item => [item.id, item]));
-  const freshIds = new Set(freshList.map(item => item.id));
-  const merged = freshList
-    .filter(item => !deletedIds.has(item.id))
-    .map(item => localById.get(item.id) || item);
-  localList.forEach(item => {
-    if (!freshIds.has(item.id) && !deletedIds.has(item.id)) merged.push(item);
+// ─── CHANGE LOG (shared audit trail, stored in the app_data blob) ─────────────
+const CHANGELOG_CAP = 500;
+function currentUserEmail() {
+  try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
+  catch(e) { return 'unknown'; }
+}
+function makeLogEntry(o) {
+  const user = currentUserEmail();
+  const collection = o.collection || 'ingredient';
+  const itemId = o.itemId || null;
+  const field = o.field || '';
+  return {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    ts: Date.now(), user, collection, itemId,
+    item: o.item || '', field,
+    from: (o.from === undefined ? null : o.from),
+    to: (o.to === undefined ? null : o.to),
+    action: o.action || 'edit',
+    coalesceKey: user + '|' + collection + '|' + (itemId || '') + '|' + field
+  };
+}
+function appendChangeLog(data, entries) {
+  if (!entries || !entries.length) return;
+  const log = Array.isArray(data.changeLog) ? data.changeLog : [];
+  const COALESCE_MS = 120000;
+  entries.forEach(e => {
+    const last = log[log.length - 1];
+    if (last && last.coalesceKey === e.coalesceKey && (e.ts - last.ts) < COALESCE_MS) {
+      last.to = e.to; last.ts = e.ts;
+    } else { log.push(e); }
   });
+  if (log.length > CHANGELOG_CAP) log.splice(0, log.length - CHANGELOG_CAP);
+  data.changeLog = log;
+}
+function itemLabel(x) {
+  if (!x) return '(item)';
+  const b = x.brand ? String(x.brand) : '';
+  const n = x.name ? String(x.name) : '';
+  return (b && n) ? b + ' — ' + n : (b || n || '(item)');
+}
+function snapList(list) { return new Map(list.map(x => [x.id, JSON.stringify(x)])); }
+function diffScalarFields(oldObj, newObj, collection, fields, out) {
+  const item = itemLabel(newObj || oldObj);
+  const id = (newObj && newObj.id) || (oldObj && oldObj.id);
+  if (!oldObj) { out.push(makeLogEntry({ collection, itemId:id, item, field:'(created)', from:null, to:item, action:'create' })); return; }
+  fields.forEach(f => {
+    const a = oldObj[f] === undefined ? null : oldObj[f];
+    const b = newObj[f] === undefined ? null : newObj[f];
+    if (JSON.stringify(a) !== JSON.stringify(b)) out.push(makeLogEntry({ collection, itemId:id, item, field:f, from:a, to:b }));
+  });
+}
+
+// Override ONLY the records this session actually edited (detected via
+// snapshot), keeping the remote version for everything else — a stale
+// in-memory copy can't revert another session's change. Also logs diffs.
+function mergeById(freshList, localList, snaps, deletedIds, collection, fields, logOut) {
+  const freshById = new Map(freshList.map(i => [i.id, i]));
+  const localById = new Map(localList.map(i => [i.id, i]));
+  const dirty = new Set();
+  localList.forEach(i => { const s = snaps.get(i.id); if (s === undefined || s !== JSON.stringify(i)) dirty.add(i.id); });
+
+  const merged = freshList.filter(i => !deletedIds.has(i.id)).map(i => {
+    if (dirty.has(i.id) && localById.has(i.id)) { if (logOut) diffScalarFields(i, localById.get(i.id), collection, fields, logOut); return localById.get(i.id); }
+    return i;
+  });
+  const mergedIds = new Set(merged.map(i => i.id));
+  localList.forEach(i => {
+    if (!mergedIds.has(i.id) && !deletedIds.has(i.id) && dirty.has(i.id)) { if (logOut) diffScalarFields(null, i, collection, fields, logOut); merged.push(i); }
+  });
+  deletedIds.forEach(id => { const gone = freshById.get(id); if (gone && logOut) logOut.push(makeLogEntry({ collection, itemId:id, item:itemLabel(gone), field:'(deleted)', from:itemLabel(gone), to:null, action:'delete' })); });
   deletedIds.clear();
   return merged;
 }
 
-async function save() {
-  // Merge by id instead of overwriting the whole arrays, so a concurrent
+async function save(opts) {
+  // Override only records this session edited (snapshot-diff), so a concurrent
   // save from another open session/tab doesn't clobber ingredients this
-  // session never touched.
+  // session never touched. opts.suppressItemLog skips per-row logging (used by
+  // bulk import, which logs a single summary line instead).
+  opts = opts || {};
   const data = await loadAppData();
-  spirits = mergeById(data.spirits || [], spirits, deletedSpiritIds);
-  otherIngredients = mergeById(data.otherIngredients || [], otherIngredients, deletedOtherIngredientIds);
+  const logEntries = opts.suppressItemLog ? null : [];
+  spirits = mergeById(data.spirits || [], spirits, spiritSnapshots, deletedSpiritIds, 'spirit', ['brand','name','subcategory','distributor','cost','sizeML','costPerOz'], logEntries);
+  otherIngredients = mergeById(data.otherIngredients || [], otherIngredients, otherSnapshots, deletedOtherIngredientIds, 'ingredient', ['name','category','sizeOz','cost','costPerOz','notes'], logEntries);
+  spiritSnapshots = snapList(spirits);
+  otherSnapshots = snapList(otherIngredients);
   data.spirits = spirits;
   data.otherIngredients = otherIngredients;
   if (importMeta) data.importMeta = importMeta;
+  const entries = logEntries || [];
+  if (opts.summaryEntry) entries.push(opts.summaryEntry);
+  appendChangeLog(data, entries);
   await saveAppData(data);
 }
 
@@ -1142,6 +1213,8 @@ async function load() {
   otherIngredients = data.otherIngredients || [];
   importMeta = data.importMeta || null;
   if (otherIngredients.length === 0) seedDefaults();
+  spiritSnapshots = snapList(spirits);
+  otherSnapshots = snapList(otherIngredients);
 }
 
 function seedDefaults() {
@@ -1317,7 +1390,8 @@ function processXLSX(file) {
         unpriced,
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       };
-      save();
+      // One summary line in the change log instead of hundreds of per-row entries.
+      save({ suppressItemLog: true, summaryEntry: makeLogEntry({ collection:'spirit', item:'Spirit library', field:'imported spreadsheet', from:null, to:`${parsed.length} items (${file.name})`, action:'import' }) });
 
       setTimeout(() => {
         progress.classList.remove('show');

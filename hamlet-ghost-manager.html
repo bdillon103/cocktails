@@ -162,6 +162,7 @@
       <div class="page-sub">Create seasonal menus, assign recipes, save and restore backups</div>
     </div>
     <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="openChangeLog().catch(e=>console.error(e))"><i class="ti ti-history"></i> Change log</button>
       <button class="btn" onclick="openBackupModal().catch(e=>console.error(e))"><i class="ti ti-archive"></i> Backups</button>
       <button class="btn btn-primary" onclick="openNewMenuModal()"><i class="ti ti-plus"></i> New menu</button>
     </div>
@@ -263,6 +264,30 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('section-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveSectionLabel()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE LOG MODAL -->
+<div class="modal-overlay" id="changelog-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">Change log</div>
+      <button class="icon-btn" onclick="closeModal('changelog-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="changelog-search" placeholder="Filter by drink, user, or field…" oninput="renderChangeLog()"
+          style="flex:1;min-width:200px;height:32px;border:1px solid var(--border-mid);border-radius:6px;padding:0 10px;font-family:var(--sans);font-size:13px;outline:none;">
+        <button class="btn btn-sm" onclick="exportChangeLog()"><i class="ti ti-download"></i> Export CSV</button>
+      </div>
+      <div id="changelog-list" style="max-height:60vh;overflow-y:auto;"></div>
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);font-size:12px;color:var(--ink-light);">
+        Records the last 500 changes across all devices — who changed what, and the value before → after. Use this to trace anything that looks like it reverted.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('changelog-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -543,6 +568,7 @@ async function doLogin() {
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let menus = [];       // { id, name, season, year, recipeIds: [{id, section}], createdAt, isActive }
 let deletedMenuIds = new Set();
+let menuSnapshots = new Map();   // id -> JSON at last load/save; used to detect this session's own edits
 let recipes = [];
 let spirits = [];
 let otherIngredients = [];
@@ -573,6 +599,65 @@ async function loadManager() {
   recipes = data.recipes || [];
   spirits = data.spirits || [];
   otherIngredients = data.otherIngredients || [];
+  menuSnapshots = new Map(menus.map(m => [m.id, JSON.stringify(m)]));
+}
+
+// ─── CHANGE LOG (shared audit trail, stored in the app_data blob) ─────────────
+const CHANGELOG_CAP = 500;
+function currentUserEmail() {
+  try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
+  catch(e) { return 'unknown'; }
+}
+function makeLogEntry(o) {
+  const user = currentUserEmail();
+  const collection = o.collection || 'menu';
+  const itemId = o.itemId || null;
+  const field = o.field || '';
+  return {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    ts: Date.now(), user, collection, itemId,
+    item: o.item || '', field,
+    from: (o.from === undefined ? null : o.from),
+    to: (o.to === undefined ? null : o.to),
+    action: o.action || 'edit',
+    coalesceKey: user + '|' + collection + '|' + (itemId || '') + '|' + field
+  };
+}
+function appendChangeLog(data, entries) {
+  if (!entries || !entries.length) return;
+  const log = Array.isArray(data.changeLog) ? data.changeLog : [];
+  const COALESCE_MS = 120000;
+  entries.forEach(e => {
+    const last = log[log.length - 1];
+    if (last && last.coalesceKey === e.coalesceKey && (e.ts - last.ts) < COALESCE_MS) {
+      last.to = e.to; last.ts = e.ts;
+    } else { log.push(e); }
+  });
+  if (log.length > CHANGELOG_CAP) log.splice(0, log.length - CHANGELOG_CAP);
+  data.changeLog = log;
+}
+// Diff the cocktail roster of a menu (add/remove/section changes read clearly).
+function menuRoster(m) {
+  const map = {};
+  (m.recipeIds || []).forEach(e => { map[e.id] = e.section || 'Cocktail Menu'; });
+  return map;
+}
+function collectMenuDiffs(oldM, newM, out) {
+  const name = (newM && newM.name) || (oldM && oldM.name) || '(menu)';
+  const id = (newM && newM.id) || (oldM && oldM.id);
+  if (!oldM) { out.push(makeLogEntry({ collection:'menu', itemId:id, item:name, field:'(created)', from:null, to:name, action:'create' })); return; }
+  ['name','isActive'].forEach(f => {
+    const a = oldM[f] === undefined ? null : oldM[f];
+    const b = newM[f] === undefined ? null : newM[f];
+    if (JSON.stringify(a) !== JSON.stringify(b)) out.push(makeLogEntry({ collection:'menu', itemId:id, item:name, field:f, from:a, to:b }));
+  });
+  const A = menuRoster(oldM), B = menuRoster(newM);
+  const nameFor = rid => (recipes.find(r => r.id === rid) || {}).name || rid;
+  Object.keys(A).forEach(rid => { if (!(rid in B)) out.push(makeLogEntry({ collection:'menu', itemId:id, item:name, field:'cocktail removed', from:nameFor(rid), to:null })); });
+  Object.keys(B).forEach(rid => {
+    if (!(rid in A)) out.push(makeLogEntry({ collection:'menu', itemId:id, item:name, field:'cocktail added', from:null, to:nameFor(rid) }));
+    else if (A[rid] !== B[rid]) out.push(makeLogEntry({ collection:'menu', itemId:id, item:name, field:nameFor(rid)+' section', from:A[rid], to:B[rid] }));
+  });
 }
 
 function load() {
@@ -580,21 +665,33 @@ function load() {
 }
 
 async function saveMenus() {
-  // Merge by id instead of overwriting the whole array, so a concurrent
-  // save from another open session/tab doesn't clobber menus this
-  // session never touched.
+  // Override ONLY the menus this session actually edited (detected via
+  // snapshot), so a stale in-memory copy can't revert another session's
+  // change. Also records every change to the shared audit log.
   const data = await loadAppData();
   const freshMenus = data.menus || [];
+  const freshById = new Map(freshMenus.map(m => [m.id, m]));
   const localById = new Map(menus.map(m => [m.id, m]));
+  const dirty = new Set();
+  menus.forEach(m => { const s = menuSnapshots.get(m.id); if (s === undefined || s !== JSON.stringify(m)) dirty.add(m.id); });
+
+  const logEntries = [];
   const merged = freshMenus
     .filter(m => !deletedMenuIds.has(m.id))
-    .map(m => localById.get(m.id) || m);
-  const freshIds = new Set(freshMenus.map(m => m.id));
+    .map(m => {
+      if (dirty.has(m.id) && localById.has(m.id)) { collectMenuDiffs(m, localById.get(m.id), logEntries); return localById.get(m.id); }
+      return m;
+    });
+  const mergedIds = new Set(merged.map(m => m.id));
   menus.forEach(m => {
-    if (!freshIds.has(m.id) && !deletedMenuIds.has(m.id)) merged.push(m);
+    if (!mergedIds.has(m.id) && !deletedMenuIds.has(m.id)) { collectMenuDiffs(null, m, logEntries); merged.push(m); }
   });
+  deletedMenuIds.forEach(id => { const gone = freshById.get(id); if (gone) logEntries.push(makeLogEntry({ collection:'menu', itemId:id, item:gone.name||'(menu)', field:'(deleted)', from:gone.name||'', to:null, action:'delete' })); });
+
+  appendChangeLog(data, logEntries);
   deletedMenuIds.clear();
   menus = merged;
+  menuSnapshots = new Map(menus.map(m => [m.id, JSON.stringify(m)]));
   data.menus = merged;
   await saveAppData(data);
 }
@@ -1082,6 +1179,64 @@ async function openBackupModal() {
   document.getElementById('backup-modal').classList.add('open');
   // Small delay to let modal render before populating
   setTimeout(() => renderBackupList(), 50);
+}
+
+// ─── CHANGE LOG VIEWER ────────────────────────────────────────────────────────
+let changeLogCache = [];
+async function openChangeLog() {
+  const data = await loadAppData();
+  changeLogCache = Array.isArray(data.changeLog) ? data.changeLog.slice() : [];
+  document.getElementById('changelog-modal').classList.add('open');
+  const box = document.getElementById('changelog-search'); if (box) box.value = '';
+  renderChangeLog();
+}
+function fmtLogVal(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  return String(v);
+}
+function fmtLogTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+function renderChangeLog() {
+  const q = (document.getElementById('changelog-search')?.value || '').trim().toLowerCase();
+  const list = document.getElementById('changelog-list');
+  let entries = changeLogCache.slice().reverse();  // newest first
+  if (q) entries = entries.filter(e => `${e.item} ${e.user} ${e.field} ${fmtLogVal(e.from)} ${fmtLogVal(e.to)}`.toLowerCase().includes(q));
+  if (entries.length === 0) {
+    list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--ink-light);font-size:13px;">${changeLogCache.length ? 'No changes match your filter.' : 'No changes recorded yet.'}</div>`;
+    return;
+  }
+  list.innerHTML = entries.map(e => {
+    const who = (e.user || 'unknown').split('@')[0];
+    return `<div style="display:flex;gap:10px;align-items:baseline;padding:8px 4px;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--ink-light);white-space:nowrap;min-width:96px;">${esc(fmtLogTime(e.ts))}</span>
+      <span style="flex:1;min-width:0;">
+        <strong>${esc(e.item || '(item)')}</strong>
+        <span style="color:var(--ink-light);"> · ${esc(e.field || e.action || 'edit')}</span>
+        <span style="display:block;font-family:var(--mono);font-size:12px;margin-top:2px;">
+          <span style="color:var(--accent);">${esc(fmtLogVal(e.from))}</span>
+          <span style="color:var(--ink-ghost);"> → </span>
+          <span style="color:var(--green,#2e7d32);">${esc(fmtLogVal(e.to))}</span>
+        </span>
+      </span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--ink-light);white-space:nowrap;">${esc(who)}</span>
+    </div>`;
+  }).join('');
+}
+function exportChangeLog() {
+  const rows = [['timestamp','user','collection','item','field','from','to','action']];
+  changeLogCache.forEach(e => rows.push([
+    new Date(e.ts).toISOString(), e.user||'', e.collection||'', e.item||'', e.field||'',
+    fmtLogVal(e.from), fmtLogVal(e.to), e.action||''
+  ]));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `hamlet-ghost-changelog-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────

@@ -842,6 +842,7 @@ function renderRecipeBlock(r, showMethod, showGarnish) {
       }).join('')}
     </ul>
     ${showMethod && (r.style || r.glass || r.ice) ? `<div class="recipe-method">${[r.style, r.glass, r.ice].filter(Boolean).join(', ')}</div>` : ''}
+    ${showMethod && r.methodNotes ? `<div class="recipe-method">${esc(r.methodNotes)}</div>` : ''}
     ${showGarnish && r.garnish ? `<div class="recipe-garnish">${esc(r.garnish)}</div>` : ''}
     ${batchGroups.length > 0 ? `<div class="recipe-batch-note">⊞ Batched: ${batchGroups.map(b => esc(b.batchName)).join(', ')}</div>` : ''}
   </div>`;

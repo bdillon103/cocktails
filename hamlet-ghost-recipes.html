@@ -558,6 +558,12 @@ let recipes = [];
 let spirits = [];
 let otherIngredients = [];
 let deletedRecipeIds = new Set();
+// JSON snapshot of each recipe as it was last loaded/saved. A recipe counts
+// as "edited by this session" only if it differs from its snapshot — that's
+// what lets a save override ONLY the records this session actually touched,
+// instead of re-asserting a whole stale in-memory copy over someone else's
+// concurrent change.
+let recipeSnapshots = new Map();
 let currentRecipeId = null;
 let pendingBatchRows = [];
 let activeAcRow = null;
@@ -595,6 +601,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   recipes = appData2.recipes || [];
   spirits = appData2.spirits || [];
   otherIngredients = appData2.otherIngredients || [];
+  snapshotRecipes();
   renderSidebar();
   updateSubtitle();
   // Auto-load recipe if coming from grid
@@ -606,22 +613,122 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+// ─── CHANGE LOG (shared audit trail, stored in the app_data blob) ─────────────
+const CHANGELOG_CAP = 500;
+function currentUserEmail() {
+  try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
+  catch(e) { return 'unknown'; }
+}
+function makeLogEntry(o) {
+  const user = currentUserEmail();
+  const collection = o.collection || 'recipe';
+  const itemId = o.itemId || null;
+  const field = o.field || '';
+  return {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    ts: Date.now(), user, collection, itemId,
+    item: o.item || '', field,
+    from: (o.from === undefined ? null : o.from),
+    to: (o.to === undefined ? null : o.to),
+    action: o.action || 'edit',
+    coalesceKey: user + '|' + collection + '|' + (itemId || '') + '|' + field
+  };
+}
+// Append entries to data.changeLog, coalescing a burst of edits to the same
+// field by the same user into one line (keeps original "from", advances "to")
+// so typing "1.5" doesn't spam the log with 0.75→1, 1→1.5, …
+function appendChangeLog(data, entries) {
+  if (!entries || !entries.length) return;
+  const log = Array.isArray(data.changeLog) ? data.changeLog : [];
+  const COALESCE_MS = 120000;
+  entries.forEach(e => {
+    const last = log[log.length - 1];
+    if (last && last.coalesceKey === e.coalesceKey && (e.ts - last.ts) < COALESCE_MS) {
+      last.to = e.to; last.ts = e.ts;
+    } else {
+      log.push(e);
+    }
+  });
+  if (log.length > CHANGELOG_CAP) log.splice(0, log.length - CHANGELOG_CAP);
+  data.changeLog = log;
+}
+function flattenIngredients(r) {
+  const map = {};
+  (r.ingredients || []).forEach(ing => {
+    if (ing.isBatchGroup) {
+      (ing.children || []).forEach(c => { const k = c.ingredientName || c.ingredientId; if (k) map[k] = ((c.qty||'') + ' ' + (c.unit||'')).trim(); });
+    } else {
+      const k = ing.ingredientName || ing.ingredientId; if (k) map[k] = ((ing.qty||'') + ' ' + (ing.unit||'')).trim();
+    }
+  });
+  return map;
+}
+// Emit human-readable diffs between two recipe objects (oldR null = created).
+function collectRecipeDiffs(oldR, newR, out) {
+  const name = (newR && newR.name) || (oldR && oldR.name) || '(untitled)';
+  const id = (newR && newR.id) || (oldR && oldR.id);
+  if (!oldR) { out.push(makeLogEntry({ collection:'recipe', itemId:id, item:name, field:'(created)', from:null, to:name, action:'create' })); return; }
+  ['name','bartender','glass','garnish','menuPrice','summary','style','ice','family','recipeType','bpYield','isHousePrep'].forEach(f => {
+    const a = oldR[f] === undefined ? null : oldR[f];
+    const b = newR[f] === undefined ? null : newR[f];
+    if (JSON.stringify(a) !== JSON.stringify(b)) out.push(makeLogEntry({ collection:'recipe', itemId:id, item:name, field:f, from:a, to:b }));
+  });
+  const A = flattenIngredients(oldR), B = flattenIngredients(newR);
+  new Set([...Object.keys(A), ...Object.keys(B)]).forEach(k => {
+    if (A[k] !== B[k]) out.push(makeLogEntry({ collection:'recipe', itemId:id, item:name, field:k + ' (amount)', from:A[k] || null, to:B[k] || null }));
+  });
+}
+
+function snapshotRecipes() {
+  recipeSnapshots = new Map(recipes.map(r => [r.id, JSON.stringify(r)]));
+}
+function recipeIsDirty(r) {
+  const snap = recipeSnapshots.get(r.id);
+  return snap === undefined || snap !== JSON.stringify(r);
+}
+
 async function saveRecipes() {
-  // Merge by id instead of overwriting the whole array, so a concurrent
-  // save from another open session/tab doesn't clobber recipes this
-  // session never touched.
   const data = await loadAppData();
   const freshRecipes = data.recipes || [];
+  const freshById = new Map(freshRecipes.map(r => [r.id, r]));
   const localById = new Map(recipes.map(r => [r.id, r]));
+
+  // Which recipes did THIS session actually change since it loaded them?
+  const dirtyIds = new Set();
+  recipes.forEach(r => { if (recipeIsDirty(r)) dirtyIds.add(r.id); });
+
+  // Build the write list from the authoritative remote copy, overriding ONLY
+  // the records this session edited. Untouched records keep the remote
+  // version, so a stale in-memory copy can never revert someone else's edit.
+  const logEntries = [];
   const merged = freshRecipes
     .filter(r => !deletedRecipeIds.has(r.id))
-    .map(r => localById.get(r.id) || r);
-  const freshIds = new Set(freshRecipes.map(r => r.id));
+    .map(r => {
+      if (dirtyIds.has(r.id) && localById.has(r.id)) {
+        const local = localById.get(r.id);
+        collectRecipeDiffs(r, local, logEntries);   // remote r → local
+        return local;
+      }
+      return r;   // keep remote — another session may have updated it
+    });
+  // Recipes this session created that aren't on remote yet
+  const mergedIds = new Set(merged.map(r => r.id));
   recipes.forEach(r => {
-    if (!freshIds.has(r.id) && !deletedRecipeIds.has(r.id)) merged.push(r);
+    if (!mergedIds.has(r.id) && !deletedRecipeIds.has(r.id)) {
+      collectRecipeDiffs(null, r, logEntries);
+      merged.push(r);
+    }
   });
+  // Deletions
+  deletedRecipeIds.forEach(id => {
+    const gone = freshById.get(id);
+    if (gone) logEntries.push(makeLogEntry({ collection:'recipe', itemId:id, item:gone.name||'(untitled)', field:'(deleted)', from:gone.name||'', to:null, action:'delete' }));
+  });
+
+  appendChangeLog(data, logEntries);
   deletedRecipeIds.clear();
   recipes = merged;
+  snapshotRecipes();          // merged is our new baseline (adopts others' changes too)
   data.recipes = merged;
   await saveAppData(data);
 }

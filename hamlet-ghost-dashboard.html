@@ -291,6 +291,41 @@ async function saveAppData(data) {
   }
 }
 
+// ─── CHANGE LOG (shared audit trail, stored in the app_data blob) ─────────────
+const CHANGELOG_CAP = 500;
+function currentUserEmail() {
+  try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
+  catch(e) { return 'unknown'; }
+}
+function makeLogEntry(o) {
+  const user = currentUserEmail();
+  const collection = o.collection || 'recipe';
+  const itemId = o.itemId || null;
+  const field = o.field || '';
+  return {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    ts: Date.now(), user, collection, itemId,
+    item: o.item || '', field,
+    from: (o.from === undefined ? null : o.from),
+    to: (o.to === undefined ? null : o.to),
+    action: o.action || 'edit',
+    coalesceKey: user + '|' + collection + '|' + (itemId || '') + '|' + field
+  };
+}
+function appendChangeLog(data, entries) {
+  if (!entries || !entries.length) return;
+  const log = Array.isArray(data.changeLog) ? data.changeLog : [];
+  const COALESCE_MS = 120000;
+  entries.forEach(e => {
+    const last = log[log.length - 1];
+    if (last && last.coalesceKey === e.coalesceKey && (e.ts - last.ts) < COALESCE_MS) {
+      last.to = e.to; last.ts = e.ts;
+    } else { log.push(e); }
+  });
+  if (log.length > CHANGELOG_CAP) log.splice(0, log.length - CHANGELOG_CAP);
+  data.changeLog = log;
+}
+
 // A failed save is otherwise silent — it's cached locally and the page
 // looks fine, but nothing reached Supabase, so it's invisible to every
 // other device until it gets clobbered by their next save. Surface it.
@@ -397,6 +432,7 @@ let menus = [];
 let activeMenu = null;
 let cogsTarget = parseFloat(localStorage.getItem('hg_cogs_target')) || 20;
 let salesData = {};       // { recipeId: count }
+let dirtySalesKeys = new Set();  // sales entries this session actually edited
 let expandedSections = {};
 const NEGLIGIBLE = ['dash','barspoon','rinse'];
 const BAR_COLORS = ['#2d6a4f','#7f77dd','#ef9f27','#d85a30','#378add','#d4537e','#639922','#5a8fa8','#9b6a2d','#4a7a5a'];
@@ -432,11 +468,26 @@ async function loadData() {
 }
 
 async function saveSalesData() {
-  // Merge with the freshly-loaded remote data so a concurrent save from
-  // another open session/tab doesn't clobber other cocktails' sold counts.
+  // Start from the authoritative remote counts and overlay ONLY the entries
+  // this session actually edited, so a stale count can't revert someone
+  // else's number. Records each change to the shared audit log.
   const data = await loadAppData();
-  salesData = { ...(data.salesData || {}), ...salesData };
-  data.salesData = salesData;
+  const remoteSales = data.salesData || {};
+  const logEntries = [];
+  const merged = { ...remoteSales };
+  dirtySalesKeys.forEach(id => {
+    const from = remoteSales[id] ?? 0;
+    const to = salesData[id] ?? 0;
+    if (from !== to) {
+      const rec = allRecipes.find(r => r.id === id);
+      logEntries.push(makeLogEntry({ collection:'sales', itemId:id, item:(rec && rec.name) || id, field:'units sold', from, to }));
+    }
+    merged[id] = salesData[id] ?? 0;
+  });
+  dirtySalesKeys.clear();
+  salesData = merged;
+  data.salesData = merged;
+  appendChangeLog(data, logEntries);
   await saveAppData(data);
 }
 
@@ -654,14 +705,16 @@ function renderCOGSSlider() {
 async function applyPrice(id, price) {
   const r = allRecipes.find(r => r.id === id);
   if (!r) return;
-  r.menuPrice = parseFloat(price);
-  // Merge by id instead of overwriting the whole array, so a concurrent
-  // save from the Recipe Builder (or another tab) isn't clobbered.
+  const newPrice = parseFloat(price);
+  // Change ONLY this recipe's price on top of the authoritative remote list,
+  // so nothing else this session is holding gets re-asserted over a
+  // concurrent edit from the Recipe Builder or another device.
   const apData = await loadAppData();
   const freshRecipes = apData.recipes || [];
-  const localById = new Map(allRecipes.map(rec => [rec.id, rec]));
-  const merged = freshRecipes.map(rec => localById.get(rec.id) || rec);
-  apData.recipes = merged;
+  const target = freshRecipes.find(x => x.id === id);
+  const fromPrice = target ? (target.menuPrice ?? null) : (r.menuPrice ?? null);
+  apData.recipes = freshRecipes.map(x => x.id === id ? { ...x, menuPrice: newPrice } : x);
+  appendChangeLog(apData, [ makeLogEntry({ collection:'recipe', itemId:id, item:(target && target.name) || r.name, field:'menuPrice', from:fromPrice, to:newPrice }) ]);
   await saveAppData(apData);
   await loadData();
   renderAll();
@@ -771,7 +824,7 @@ function renderSalesVolume() {
           <span class="sales-pc" style="color:${pcColor(pc)};">${pc!==null?pc.toFixed(1)+'%':'—'}</span>
           <input type="number" class="sales-input" placeholder="0" min="0"
             value="${salesData[r.id]||''}"
-            oninput="salesData['${r.id}']=parseInt(this.value)||0"
+            oninput="salesData['${r.id}']=parseInt(this.value)||0;dirtySalesKeys.add('${r.id}')"
             onblur="saveSalesData().then(()=>renderAll())">
           <span style="font-size:11px;color:var(--ink-light);">total sold</span>
         </div>`;
