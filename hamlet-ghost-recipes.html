@@ -39,7 +39,12 @@
   .sidebar { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; position: sticky; top: 1rem; }
   .sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--parchment-dark); display: flex; align-items: center; justify-content: space-between; }
   .sidebar-title { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-light); }
-  .recipe-list { max-height: calc(100vh - 180px); overflow-y: auto; }
+  .sidebar-search { position: relative; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-search-icon { position: absolute; left: 24px; top: 50%; transform: translateY(-50%); color: var(--ink-light); font-size: 13px; pointer-events: none; }
+  .sidebar-search-input { width: 100%; height: 32px; border: 1px solid var(--border-mid); border-radius: var(--radius); padding: 0 10px 0 30px; font-family: var(--sans); font-size: 13px; background: white; color: var(--ink); outline: none; box-sizing: border-box; transition: border-color 0.15s; }
+  .sidebar-search-input:focus { border-color: var(--ink-mid); }
+  .sidebar-search-input::placeholder { color: var(--ink-ghost); }
+  .recipe-list { max-height: calc(100vh - 232px); overflow-y: auto; }
   .recipe-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .recipe-item:hover { background: var(--parchment); }
   .recipe-item.active { background: var(--ink); }
@@ -221,6 +226,10 @@
         <span class="sidebar-title">Recipes <span id="sidebar-count" style="margin-left:4px;background:var(--parchment-mid);padding:1px 6px;border-radius:10px;font-size:10px;">0</span></span>
         <button class="btn btn-sm" onclick="newRecipe()"><i class="ti ti-plus"></i></button>
       </div>
+      <div class="sidebar-search">
+        <span class="sidebar-search-icon"><i class="ti ti-search"></i></span>
+        <input type="text" class="sidebar-search-input" id="sidebar-search-input" placeholder="Search recipes..." oninput="renderSidebar()">
+      </div>
       <div class="recipe-list" id="recipe-list">
         <div class="sidebar-empty">No recipes yet.<br>Click + New recipe to start.</div>
       </div>
@@ -326,7 +335,7 @@ const LS_KEY = 'hg_app_data_v1';
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
 async function sbRequest(method, path, body) {
-  const session = getSession();
+  const session = await getValidSession();
   const headers = {
     'apikey': SUPABASE_KEY,
     'Content-Type': 'application/json',
@@ -348,15 +357,34 @@ async function sbRequest(method, path, body) {
 function getSession() {
   const raw = localStorage.getItem('hg_session');
   if (!raw) return null;
-  try {
-    const session = JSON.parse(raw);
-    // Check if expired
-    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
-      localStorage.removeItem('hg_session');
-      return null;
-    }
-    return session;
-  } catch(e) { return null; }
+  try { return JSON.parse(raw); } catch(e) { return null; }
+}
+
+// Returns a session with a live access token, refreshing via the refresh
+// token first if it has expired (or is about to). Without this, a session
+// silently stops syncing ~1hr after login: sbRequest falls back to the
+// unauthenticated key, RLS rejects the write, and it's swallowed as a
+// "cached locally" warning — this is a major source of saves that never
+// make it to Supabase and then look like they were "overwritten."
+let sessionRefresh = null;
+async function getValidSession() {
+  const session = getSession();
+  if (!session) return null;
+  if (session.expires_at && Date.now() / 1000 < session.expires_at - 60) return session;
+  if (!session.refresh_token) { localStorage.removeItem('hg_session'); return null; }
+  if (!sessionRefresh) {
+    sessionRefresh = fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    }).then(async (res) => {
+      if (!res.ok) { localStorage.removeItem('hg_session'); return null; }
+      const data = await res.json();
+      localStorage.setItem('hg_session', JSON.stringify(data));
+      return data;
+    }).catch(() => null).finally(() => { sessionRefresh = null; });
+  }
+  return sessionRefresh;
 }
 
 async function signIn(email, password) {
@@ -419,9 +447,34 @@ async function saveAppData(data) {
   // Save to Supabase
   try {
     await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+    lastFailedSaveData = null;
+    hideSaveErrorBanner();
   } catch(e) {
     console.warn('Supabase save failed, data cached locally:', e.message);
+    lastFailedSaveData = data;
+    showSaveErrorBanner();
   }
+}
+
+// A failed save is otherwise silent — it's cached locally and the page
+// looks fine, but nothing reached Supabase, so it's invisible to every
+// other device until it gets clobbered by their next save. Surface it.
+let lastFailedSaveData = null;
+function showSaveErrorBanner() {
+  if (document.getElementById('save-error-banner')) return;
+  const el = document.createElement('div');
+  el.id = 'save-error-banner';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
+  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
+    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
+  document.body.appendChild(el);
+  document.getElementById('save-error-retry').onclick = async () => {
+    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
+  };
+}
+function hideSaveErrorBanner() {
+  const el = document.getElementById('save-error-banner');
+  if (el) el.remove();
 }
 
 function migrateFromOldKeys() {
@@ -504,6 +557,7 @@ async function doLogin() {
 let recipes = [];
 let spirits = [];
 let otherIngredients = [];
+let deletedRecipeIds = new Set();
 let currentRecipeId = null;
 let pendingBatchRows = [];
 let activeAcRow = null;
@@ -553,8 +607,22 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function saveRecipes() {
+  // Merge by id instead of overwriting the whole array, so a concurrent
+  // save from another open session/tab doesn't clobber recipes this
+  // session never touched.
   const data = await loadAppData();
-  data.recipes = recipes;
+  const freshRecipes = data.recipes || [];
+  const localById = new Map(recipes.map(r => [r.id, r]));
+  const merged = freshRecipes
+    .filter(r => !deletedRecipeIds.has(r.id))
+    .map(r => localById.get(r.id) || r);
+  const freshIds = new Set(freshRecipes.map(r => r.id));
+  recipes.forEach(r => {
+    if (!freshIds.has(r.id) && !deletedRecipeIds.has(r.id)) merged.push(r);
+  });
+  deletedRecipeIds.clear();
+  recipes = merged;
+  data.recipes = merged;
   await saveAppData(data);
 }
 
@@ -567,13 +635,21 @@ function updateSubtitle() {
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function renderSidebar() {
   const list = document.getElementById('recipe-list');
-  document.getElementById('sidebar-count').textContent = recipes.length;
   if (recipes.length === 0) {
+    document.getElementById('sidebar-count').textContent = recipes.length;
     list.innerHTML = `<div class="sidebar-empty">No recipes yet.<br>Click + New recipe to start.</div>`;
     return;
   }
-  const cocktails = recipes.filter(r => r.recipeType !== 'barprep');
-  const barprep = recipes.filter(r => r.recipeType === 'barprep');
+  const query = (document.getElementById('sidebar-search-input')?.value || '').trim().toLowerCase();
+  const matches = r => !query || `${r.name||''} ${r.bartender||''} ${r.style||''} ${r.family||''} ${r.glass||''}`.toLowerCase().includes(query);
+  const visible = recipes.filter(matches);
+  document.getElementById('sidebar-count').textContent = query ? `${visible.length}/${recipes.length}` : recipes.length;
+  if (visible.length === 0) {
+    list.innerHTML = `<div class="sidebar-empty">No recipes match "${esc(query)}".</div>`;
+    return;
+  }
+  const cocktails = visible.filter(r => r.recipeType !== 'barprep');
+  const barprep = visible.filter(r => r.recipeType === 'barprep');
 
   const renderGroup = (items, label) => {
     if (items.length === 0) return '';
@@ -737,8 +813,11 @@ function renderBuilder(r) {
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Ingredient summary / notes</label>
-          <textarea class="form-textarea" id="r-summary" placeholder="Short description for menu grid and spec sheet..." oninput="updateField('summary',this.value)">${esc(r.summary)}</textarea>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;">
+            <label class="form-label">Menu Description</label>
+            <span id="r-summary-counter" style="font-family:var(--mono);font-size:10px;color:${(r.summary||'').length>65?'var(--accent)':'var(--ink-light)'};">${(r.summary||'').length} chars</span>
+          </div>
+          <textarea class="form-textarea" id="r-summary" placeholder="Short description for menu grid and spec sheet..." oninput="updateField('summary',this.value);updateSummaryCounter()">${esc(r.summary)}</textarea>
         </div>
       </div>
 
@@ -1390,6 +1469,15 @@ function updateField(field, val) {
   if (['name','style','menuPrice'].includes(field)) renderSidebar();
 }
 
+function updateSummaryCounter() {
+  const el = document.getElementById('r-summary-counter');
+  const ta = document.getElementById('r-summary');
+  if (!el || !ta) return;
+  const len = ta.value.length;
+  el.textContent = `${len} chars`;
+  el.style.color = len > 65 ? 'var(--accent)' : 'var(--ink-light)';
+}
+
 function setRecipeType(type) {
   const r = currentRecipe();
   if (!r) return;
@@ -1500,6 +1588,7 @@ function openDeleteModal(id) {
 }
 
 function confirmDeleteRecipe() {
+  deletedRecipeIds.add(deletingId);
   recipes = recipes.filter(r => r.id !== deletingId);
   saveRecipes();
   currentRecipeId = null;

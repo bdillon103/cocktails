@@ -874,7 +874,7 @@ const LS_KEY = 'hg_app_data_v1';
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
 async function sbRequest(method, path, body) {
-  const session = getSession();
+  const session = await getValidSession();
   const headers = {
     'apikey': SUPABASE_KEY,
     'Content-Type': 'application/json',
@@ -896,15 +896,34 @@ async function sbRequest(method, path, body) {
 function getSession() {
   const raw = localStorage.getItem('hg_session');
   if (!raw) return null;
-  try {
-    const session = JSON.parse(raw);
-    // Check if expired
-    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
-      localStorage.removeItem('hg_session');
-      return null;
-    }
-    return session;
-  } catch(e) { return null; }
+  try { return JSON.parse(raw); } catch(e) { return null; }
+}
+
+// Returns a session with a live access token, refreshing via the refresh
+// token first if it has expired (or is about to). Without this, a session
+// silently stops syncing ~1hr after login: sbRequest falls back to the
+// unauthenticated key, RLS rejects the write, and it's swallowed as a
+// "cached locally" warning — this is a major source of saves that never
+// make it to Supabase and then look like they were "overwritten."
+let sessionRefresh = null;
+async function getValidSession() {
+  const session = getSession();
+  if (!session) return null;
+  if (session.expires_at && Date.now() / 1000 < session.expires_at - 60) return session;
+  if (!session.refresh_token) { localStorage.removeItem('hg_session'); return null; }
+  if (!sessionRefresh) {
+    sessionRefresh = fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    }).then(async (res) => {
+      if (!res.ok) { localStorage.removeItem('hg_session'); return null; }
+      const data = await res.json();
+      localStorage.setItem('hg_session', JSON.stringify(data));
+      return data;
+    }).catch(() => null).finally(() => { sessionRefresh = null; });
+  }
+  return sessionRefresh;
 }
 
 async function signIn(email, password) {
@@ -967,9 +986,34 @@ async function saveAppData(data) {
   // Save to Supabase
   try {
     await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+    lastFailedSaveData = null;
+    hideSaveErrorBanner();
   } catch(e) {
     console.warn('Supabase save failed, data cached locally:', e.message);
+    lastFailedSaveData = data;
+    showSaveErrorBanner();
   }
+}
+
+// A failed save is otherwise silent — it's cached locally and the page
+// looks fine, but nothing reached Supabase, so it's invisible to every
+// other device until it gets clobbered by their next save. Surface it.
+let lastFailedSaveData = null;
+function showSaveErrorBanner() {
+  if (document.getElementById('save-error-banner')) return;
+  const el = document.createElement('div');
+  el.id = 'save-error-banner';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
+  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
+    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
+  document.body.appendChild(el);
+  document.getElementById('save-error-retry').onclick = async () => {
+    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
+  };
+}
+function hideSaveErrorBanner() {
+  const el = document.getElementById('save-error-banner');
+  if (el) el.remove();
 }
 
 function migrateFromOldKeys() {
@@ -1051,6 +1095,8 @@ async function doLogin() {
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let spirits = [];
 let otherIngredients = [];
+let deletedSpiritIds = new Set();
+let deletedOtherIngredientIds = new Set();
 let filteredSpirits = [];
 let currentTab = 'spirits';
 let currentPage = 1;
@@ -1064,8 +1110,26 @@ let importMeta = null;
 const EXCLUDED_CATEGORIES = ['Beer', 'Wine', 'Wine By The Glass', 'Accessory'];
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
+function mergeById(freshList, localList, deletedIds) {
+  const localById = new Map(localList.map(item => [item.id, item]));
+  const freshIds = new Set(freshList.map(item => item.id));
+  const merged = freshList
+    .filter(item => !deletedIds.has(item.id))
+    .map(item => localById.get(item.id) || item);
+  localList.forEach(item => {
+    if (!freshIds.has(item.id) && !deletedIds.has(item.id)) merged.push(item);
+  });
+  deletedIds.clear();
+  return merged;
+}
+
 async function save() {
+  // Merge by id instead of overwriting the whole arrays, so a concurrent
+  // save from another open session/tab doesn't clobber ingredients this
+  // session never touched.
   const data = await loadAppData();
+  spirits = mergeById(data.spirits || [], spirits, deletedSpiritIds);
+  otherIngredients = mergeById(data.otherIngredients || [], otherIngredients, deletedOtherIngredientIds);
   data.spirits = spirits;
   data.otherIngredients = otherIngredients;
   if (importMeta) data.importMeta = importMeta;
@@ -1241,6 +1305,10 @@ function processXLSX(file) {
       bar.style.width = '100%';
       label.textContent = 'Done!';
 
+      // Full catalog replacement: mark every pre-import spirit as deleted so
+      // the id-merge in save() drops them instead of keeping them alongside
+      // the freshly imported rows.
+      spirits.forEach(s => deletedSpiritIds.add(s.id));
       spirits = parsed;
       const unpriced = parsed.filter(p => !p.cost || p.cost === 0).length;
       importMeta = {
@@ -1655,6 +1723,7 @@ function confirmDelete(id) {
   const ing = spirits.find(s => s.id === id);
   if (!ing) return;
   if (confirm(`Delete "${[ing.brand, ing.name].filter(Boolean).join(" — ")}"? This cannot be undone.`)) {
+    deletedSpiritIds.add(id);
     spirits = spirits.filter(s => s.id !== id);
     save();
     filterTable();
@@ -1664,6 +1733,7 @@ function confirmDelete(id) {
 }
 
 function deleteIngredient() {
+  deletedSpiritIds.add(editingId);
   spirits = spirits.filter(s => s.id !== editingId);
   save();
   filterTable();
@@ -1720,12 +1790,26 @@ function saveOtherEdit() {
 }
 
 function deleteOtherIngredient() {
+  deletedOtherIngredientIds.add(editingId);
   otherIngredients = otherIngredients.filter(o => o.id !== editingId);
   save();
   renderOtherTable();
   updateSubtitle();
   closeModal('edit-modal');
   showToast('Ingredient deleted');
+}
+
+function deleteOther(id) {
+  const ing = otherIngredients.find(o => o.id === id);
+  if (!ing) return;
+  if (confirm(`Delete "${ing.name}"? This cannot be undone.`)) {
+    deletedOtherIngredientIds.add(id);
+    otherIngredients = otherIngredients.filter(o => o.id !== id);
+    save();
+    renderOtherTable();
+    updateSubtitle();
+    showToast('Ingredient deleted');
+  }
 }
 
 // ─── MODAL UTILS ─────────────────────────────────────────────────────────────

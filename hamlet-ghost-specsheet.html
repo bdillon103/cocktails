@@ -409,7 +409,7 @@ const LS_KEY = 'hg_app_data_v1';
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
 async function sbRequest(method, path, body) {
-  const session = getSession();
+  const session = await getValidSession();
   const headers = {
     'apikey': SUPABASE_KEY,
     'Content-Type': 'application/json',
@@ -431,15 +431,34 @@ async function sbRequest(method, path, body) {
 function getSession() {
   const raw = localStorage.getItem('hg_session');
   if (!raw) return null;
-  try {
-    const session = JSON.parse(raw);
-    // Check if expired
-    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
-      localStorage.removeItem('hg_session');
-      return null;
-    }
-    return session;
-  } catch(e) { return null; }
+  try { return JSON.parse(raw); } catch(e) { return null; }
+}
+
+// Returns a session with a live access token, refreshing via the refresh
+// token first if it has expired (or is about to). Without this, a session
+// silently stops syncing ~1hr after login: sbRequest falls back to the
+// unauthenticated key, RLS rejects the write, and it's swallowed as a
+// "cached locally" warning — this is a major source of saves that never
+// make it to Supabase and then look like they were "overwritten."
+let sessionRefresh = null;
+async function getValidSession() {
+  const session = getSession();
+  if (!session) return null;
+  if (session.expires_at && Date.now() / 1000 < session.expires_at - 60) return session;
+  if (!session.refresh_token) { localStorage.removeItem('hg_session'); return null; }
+  if (!sessionRefresh) {
+    sessionRefresh = fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    }).then(async (res) => {
+      if (!res.ok) { localStorage.removeItem('hg_session'); return null; }
+      const data = await res.json();
+      localStorage.setItem('hg_session', JSON.stringify(data));
+      return data;
+    }).catch(() => null).finally(() => { sessionRefresh = null; });
+  }
+  return sessionRefresh;
 }
 
 async function signIn(email, password) {
@@ -502,9 +521,34 @@ async function saveAppData(data) {
   // Save to Supabase
   try {
     await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+    lastFailedSaveData = null;
+    hideSaveErrorBanner();
   } catch(e) {
     console.warn('Supabase save failed, data cached locally:', e.message);
+    lastFailedSaveData = data;
+    showSaveErrorBanner();
   }
+}
+
+// A failed save is otherwise silent — it's cached locally and the page
+// looks fine, but nothing reached Supabase, so it's invisible to every
+// other device until it gets clobbered by their next save. Surface it.
+let lastFailedSaveData = null;
+function showSaveErrorBanner() {
+  if (document.getElementById('save-error-banner')) return;
+  const el = document.createElement('div');
+  el.id = 'save-error-banner';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
+  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
+    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
+  document.body.appendChild(el);
+  document.getElementById('save-error-retry').onclick = async () => {
+    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
+  };
+}
+function hideSaveErrorBanner() {
+  const el = document.getElementById('save-error-banner');
+  if (el) el.remove();
 }
 
 function migrateFromOldKeys() {
@@ -742,8 +786,21 @@ function renderSpecSheet(forPrint = false) {
 
   // BAR PREP PAGE
   if (showBarPrep) {
-    const barPrepRecipes = allRecipes.filter(r => r.recipeType === 'barprep');
-    const houseStaples = otherIngredients.filter(o => o.notes);
+    const usedBarPrepIds = new Set();
+    recipes.filter(r => r.recipeType !== 'barprep').forEach(r => {
+      (r.ingredients || []).forEach(ing => {
+        if (ing.ingredientId) usedBarPrepIds.add(ing.ingredientId);
+        if (ing.isBatchGroup) (ing.children || []).forEach(c => { if (c.ingredientId) usedBarPrepIds.add(c.ingredientId); });
+      });
+    });
+    const barPrepRecipes = allRecipes.filter(r => r.recipeType === 'barprep' && (r.isHousePrep || usedBarPrepIds.has(r.id)));
+    // Only genuine in-house prep prints as a "house staple" — syrups and
+    // house-made solutions (Simple Syrup, Saline, etc.). Juices, garnishes,
+    // dairy, and generic "Other" (fresh-squeezed juice, Cold Brew) are
+    // ingredients, not bar prep, so they stay off the spec sheet even
+    // though they have a notes field.
+    const HOUSE_STAPLE_CATEGORIES = ['Syrup', 'House-made'];
+    const houseStaples = otherIngredients.filter(o => HOUSE_STAPLE_CATEGORIES.includes(o.category));
 
     if (barPrepRecipes.length > 0 || houseStaples.length > 0) {
       html += `<div class="spec-page">
@@ -922,8 +979,11 @@ async function saveStylePreset() {
   const name = prompt('Preset name:');
   if (!name || !name.trim()) return;
   const id = 'sp_' + Date.now();
-  specStylePresets.push({ id: id, name: name.trim(), config: Object.assign({}, styleConfig) });
+  const newPreset = { id: id, name: name.trim(), config: Object.assign({}, styleConfig) };
+  // Append onto the freshly-loaded list (not the possibly-stale local one)
+  // so a preset added from another tab in the meantime isn't clobbered.
   const data = await loadAppData();
+  specStylePresets = [...(data.specStylePresets || []), newPreset];
   data.specStylePresets = specStylePresets;
   await saveAppData(data);
   renderPresetList();

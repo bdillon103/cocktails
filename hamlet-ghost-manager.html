@@ -322,7 +322,7 @@ const LS_KEY = 'hg_app_data_v1';
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
 async function sbRequest(method, path, body) {
-  const session = getSession();
+  const session = await getValidSession();
   const headers = {
     'apikey': SUPABASE_KEY,
     'Content-Type': 'application/json',
@@ -344,15 +344,34 @@ async function sbRequest(method, path, body) {
 function getSession() {
   const raw = localStorage.getItem('hg_session');
   if (!raw) return null;
-  try {
-    const session = JSON.parse(raw);
-    // Check if expired
-    if (session.expires_at && Date.now() / 1000 > session.expires_at) {
-      localStorage.removeItem('hg_session');
-      return null;
-    }
-    return session;
-  } catch(e) { return null; }
+  try { return JSON.parse(raw); } catch(e) { return null; }
+}
+
+// Returns a session with a live access token, refreshing via the refresh
+// token first if it has expired (or is about to). Without this, a session
+// silently stops syncing ~1hr after login: sbRequest falls back to the
+// unauthenticated key, RLS rejects the write, and it's swallowed as a
+// "cached locally" warning — this is a major source of saves that never
+// make it to Supabase and then look like they were "overwritten."
+let sessionRefresh = null;
+async function getValidSession() {
+  const session = getSession();
+  if (!session) return null;
+  if (session.expires_at && Date.now() / 1000 < session.expires_at - 60) return session;
+  if (!session.refresh_token) { localStorage.removeItem('hg_session'); return null; }
+  if (!sessionRefresh) {
+    sessionRefresh = fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    }).then(async (res) => {
+      if (!res.ok) { localStorage.removeItem('hg_session'); return null; }
+      const data = await res.json();
+      localStorage.setItem('hg_session', JSON.stringify(data));
+      return data;
+    }).catch(() => null).finally(() => { sessionRefresh = null; });
+  }
+  return sessionRefresh;
 }
 
 async function signIn(email, password) {
@@ -415,9 +434,34 @@ async function saveAppData(data) {
   // Save to Supabase
   try {
     await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+    lastFailedSaveData = null;
+    hideSaveErrorBanner();
   } catch(e) {
     console.warn('Supabase save failed, data cached locally:', e.message);
+    lastFailedSaveData = data;
+    showSaveErrorBanner();
   }
+}
+
+// A failed save is otherwise silent — it's cached locally and the page
+// looks fine, but nothing reached Supabase, so it's invisible to every
+// other device until it gets clobbered by their next save. Surface it.
+let lastFailedSaveData = null;
+function showSaveErrorBanner() {
+  if (document.getElementById('save-error-banner')) return;
+  const el = document.createElement('div');
+  el.id = 'save-error-banner';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
+  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
+    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
+  document.body.appendChild(el);
+  document.getElementById('save-error-retry').onclick = async () => {
+    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
+  };
+}
+function hideSaveErrorBanner() {
+  const el = document.getElementById('save-error-banner');
+  if (el) el.remove();
 }
 
 function migrateFromOldKeys() {
@@ -498,6 +542,7 @@ async function doLogin() {
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let menus = [];       // { id, name, season, year, recipeIds: [{id, section}], createdAt, isActive }
+let deletedMenuIds = new Set();
 let recipes = [];
 let spirits = [];
 let otherIngredients = [];
@@ -535,8 +580,22 @@ function load() {
 }
 
 async function saveMenus() {
+  // Merge by id instead of overwriting the whole array, so a concurrent
+  // save from another open session/tab doesn't clobber menus this
+  // session never touched.
   const data = await loadAppData();
-  data.menus = menus;
+  const freshMenus = data.menus || [];
+  const localById = new Map(menus.map(m => [m.id, m]));
+  const merged = freshMenus
+    .filter(m => !deletedMenuIds.has(m.id))
+    .map(m => localById.get(m.id) || m);
+  const freshIds = new Set(freshMenus.map(m => m.id));
+  menus.forEach(m => {
+    if (!freshIds.has(m.id) && !deletedMenuIds.has(m.id)) merged.push(m);
+  });
+  deletedMenuIds.clear();
+  menus = merged;
+  data.menus = merged;
   await saveAppData(data);
 }
 
@@ -612,6 +671,11 @@ function selectMenu(id) {
 }
 
 // ─── MENU DETAIL ─────────────────────────────────────────────────────────────
+function goToRecipe(id) {
+  localStorage.setItem('hg_edit_recipe', id);
+  window.location.href = 'hamlet-ghost-recipes.html';
+}
+
 function renderDetail() {
   const menu = menus.find(m => m.id === activeMenuId);
   if (!menu) return;
@@ -687,17 +751,17 @@ function renderAssignedList(assignedRecipes) {
         const r = a.recipe;
         const pc = calcPC(r);
         const cost = calcCost(r);
-        return `<div class="assigned-item">
+        return `<div class="assigned-item" onclick="goToRecipe('${r.id}')" title="Open in Recipe Builder" style="cursor:pointer;">
           <i class="ti ti-grip-vertical drag-handle"></i>
           <div style="flex:1;min-width:0;">
             <div class="assigned-name">${esc(r.name||'Untitled')}</div>
             <div class="assigned-meta">${r.style||'—'} · ${r.glass||'—'} · ${r.ice||'—'}</div>
           </div>
-          <span class="section-tag" onclick="openSectionModal('${a.id}')" title="Change section">${esc(a.section||'Cocktail Menu')} <i class="ti ti-chevron-down" style="font-size:9px;vertical-align:1px;"></i></span>
+          <span class="section-tag" onclick="event.stopPropagation();openSectionModal('${a.id}')" title="Change section">${esc(a.section||'Cocktail Menu')} <i class="ti ti-chevron-down" style="font-size:9px;vertical-align:1px;"></i></span>
           <div style="display:flex;align-items:center;gap:8px;margin-left:8px;">
             <span class="assigned-cost" style="color:${pcColor(pc)};">${pc!==null?pc.toFixed(1)+'%':'—'}</span>
             <span style="font-family:var(--mono);font-size:11px;color:var(--ink-light);">${r.menuPrice?'$'+r.menuPrice.toFixed(2):'—'}</span>
-            <div class="icon-btn danger" onclick="removeFromMenu('${activeMenuId}','${a.id}')" title="Remove"><i class="ti ti-x"></i></div>
+            <div class="icon-btn danger" onclick="event.stopPropagation();removeFromMenu('${activeMenuId}','${a.id}')" title="Remove"><i class="ti ti-x"></i></div>
           </div>
         </div>`;
       }).join('')}
@@ -735,6 +799,7 @@ async function createMenu() {
 async function deleteMenu(id) {
   const m = menus.find(m => m.id === id);
   if (!confirm(`Delete "${m?.name}"? This cannot be undone.`)) return;
+  deletedMenuIds.add(id);
   menus = menus.filter(m => m.id !== id);
   if (activeMenuId === id) {
     activeMenuId = menus[0]?.id || null;
@@ -850,6 +915,7 @@ async function addSelectedRecipes() {
   await saveMenus();
   closeModal('add-recipes-modal');
   renderDetail();
+  renderMenusList();
   showToast(`✓ Added ${poolSelected.length} cocktail${poolSelected.length!==1?'s':''} to menu`);
   poolSelected = [];
 }
@@ -861,6 +927,7 @@ async function removeFromMenu(menuId, recipeId) {
   menu.recipeIds = menu.recipeIds.filter(r => r.id !== recipeId);
   await saveMenus();
   renderDetail();
+  renderMenusList();
   showToast('Removed from menu');
 }
 
