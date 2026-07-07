@@ -246,6 +246,7 @@
     </div>
     <div style="display:flex;gap:8px;">
       <button class="btn" onclick="refreshPreview()"><i class="ti ti-refresh"></i> Refresh</button>
+      <button class="btn" onclick="copySpecMarkdown()" title="Copy the sheet as Markdown for Google Docs (Edit → Paste from Markdown)"><i class="ti ti-clipboard-copy"></i> Copy Markdown</button>
       <button class="btn btn-accent" onclick="printSpec()"><i class="ti ti-printer"></i> Print / Save PDF</button>
     </div>
   </div>
@@ -744,6 +745,28 @@ function getRecipesForSection(sectionLabel) {
     .filter(r => r.recipeType !== 'barprep');
 }
 
+// Bar prep recipes that belong on the sheet (House Prep or referenced by an
+// active-menu cocktail) plus house staples. Shared by the HTML renderer and
+// the markdown export so the two can't drift apart.
+function getBarPrepForSheet() {
+  const usedBarPrepIds = new Set();
+  recipes.filter(r => r.recipeType !== 'barprep').forEach(r => {
+    (r.ingredients || []).forEach(ing => {
+      if (ing.ingredientId) usedBarPrepIds.add(ing.ingredientId);
+      if (ing.isBatchGroup) (ing.children || []).forEach(c => { if (c.ingredientId) usedBarPrepIds.add(c.ingredientId); });
+    });
+  });
+  const barPrepRecipes = allRecipes.filter(r => r.recipeType === 'barprep' && (r.isHousePrep || usedBarPrepIds.has(r.id)));
+  // Only genuine in-house prep prints as a "house staple" — syrups and
+  // house-made solutions (Simple Syrup, Saline, etc.). Juices, garnishes,
+  // dairy, and generic "Other" (fresh-squeezed juice, Cold Brew) are
+  // ingredients, not bar prep, so they stay off the spec sheet even
+  // though they have a notes field.
+  const HOUSE_STAPLE_CATEGORIES = ['Syrup', 'House-made'];
+  const houseStaples = otherIngredients.filter(o => HOUSE_STAPLE_CATEGORIES.includes(o.category));
+  return { barPrepRecipes, houseStaples };
+}
+
 // ─── SPEC SHEET RENDERING ────────────────────────────────────────────────────
 function renderSpecSheet(forPrint = false) {
   const showCover = document.getElementById('opt-cover').checked;
@@ -786,21 +809,7 @@ function renderSpecSheet(forPrint = false) {
 
   // BAR PREP PAGE
   if (showBarPrep) {
-    const usedBarPrepIds = new Set();
-    recipes.filter(r => r.recipeType !== 'barprep').forEach(r => {
-      (r.ingredients || []).forEach(ing => {
-        if (ing.ingredientId) usedBarPrepIds.add(ing.ingredientId);
-        if (ing.isBatchGroup) (ing.children || []).forEach(c => { if (c.ingredientId) usedBarPrepIds.add(c.ingredientId); });
-      });
-    });
-    const barPrepRecipes = allRecipes.filter(r => r.recipeType === 'barprep' && (r.isHousePrep || usedBarPrepIds.has(r.id)));
-    // Only genuine in-house prep prints as a "house staple" — syrups and
-    // house-made solutions (Simple Syrup, Saline, etc.). Juices, garnishes,
-    // dairy, and generic "Other" (fresh-squeezed juice, Cold Brew) are
-    // ingredients, not bar prep, so they stay off the spec sheet even
-    // though they have a notes field.
-    const HOUSE_STAPLE_CATEGORIES = ['Syrup', 'House-made'];
-    const houseStaples = otherIngredients.filter(o => HOUSE_STAPLE_CATEGORIES.includes(o.category));
+    const { barPrepRecipes, houseStaples } = getBarPrepForSheet();
 
     if (barPrepRecipes.length > 0 || houseStaples.length > 0) {
       html += `<div class="spec-page">
@@ -875,6 +884,86 @@ function renderStapleBlock(o) {
     + '<div class="recipe-name">' + esc(o.name) + '</div>'
     + (o.notes ? '<div class="recipe-garnish">' + esc(o.notes) + '</div>' : '')
     + '</div>';
+}
+
+// ─── MARKDOWN EXPORT (Google Docs: Edit → Paste from Markdown) ───────────────
+// Mirrors what's on the rendered sheet — same toggles, same section
+// visibility, same qty formatting. Per-cocktail shape follows the house
+// Google Doc format:
+//   # **Name**  /  ## qty Ingredient  /  ### **Style, Glass, Ice**
+//   ### **method notes**  /  #### **Garnish**
+function buildSpecMarkdown() {
+  const showBarPrep = document.getElementById('opt-barprep').checked;
+  const showMethod = document.getElementById('opt-method').checked;
+  const showGarnish = document.getElementById('opt-garnish').checked;
+  const lines = [];
+
+  // No cover/title block in the markdown — the Google Doc starts straight
+  // at the drinks (cover toggle only affects the rendered/printed sheet).
+
+  const visibleSections = sections.filter(s => s.visible).filter(s => getRecipesForSection(s.label).length > 0);
+  visibleSections.forEach(sec => {
+    if (visibleSections.length > 1) lines.push(`**${sec.label.toUpperCase()}**`, '');
+    getRecipesForSection(sec.label).forEach(r => {
+      lines.push(`# **${r.name || 'Untitled'}**`, '');
+      (r.ingredients || []).forEach(ing => {
+        if (ing.isBatchGroup) { lines.push(`## *${ing.batchName || 'Batch'}*`, ''); return; }
+        const qty = ing.qty ? formatQty(ing.qty, ing.unit) : '';
+        const line = [qty, ing.ingredientName || ''].filter(Boolean).join(' ').trim();
+        if (line) lines.push(`## ${line}`, '');
+      });
+      if (showMethod && (r.style || r.glass || r.ice)) lines.push(`### **${[r.style, r.glass, r.ice].filter(Boolean).join(', ')}**`, '');
+      if (showMethod && r.methodNotes) lines.push(`### **${r.methodNotes}**`, '');
+      if (showGarnish && r.garnish) lines.push(`#### **${r.garnish}**`, '');
+    });
+  });
+
+  if (showBarPrep) {
+    const { barPrepRecipes, houseStaples } = getBarPrepForSheet();
+    if (barPrepRecipes.length > 0 || houseStaples.length > 0) {
+      lines.push('# **Bar Prep**', '');
+      barPrepRecipes.forEach(r => {
+        lines.push(`**${r.name || 'Untitled'}**${r.bpYield ? ` — ${r.bpYield}` : ''}`, '');
+        (r.bpIngredients || []).forEach(ing => {
+          const qty = [ing.qty, ing.unit].filter(Boolean).join(' ');
+          const line = [qty, ing.name || ''].filter(Boolean).join(' ').trim();
+          if (line) lines.push(`- ${line}`);
+        });
+        if ((r.bpIngredients || []).length) lines.push('');
+        (r.bpSteps || []).forEach((s, i) => lines.push(`${i + 1}. ${s}`));
+        if ((r.bpSteps || []).length) lines.push('');
+        if (r.summary) lines.push(`*${r.summary}*`, '');
+      });
+      houseStaples.forEach(o => {
+        lines.push(`**${o.name}**${o.notes ? ` — ${o.notes}` : ''}`, '');
+      });
+    }
+  }
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+}
+
+async function copySpecMarkdown() {
+  const md = buildSpecMarkdown();
+  try {
+    await navigator.clipboard.writeText(md);
+    showToast('✓ Copied — in Google Docs use Edit → Paste from Markdown');
+  } catch (e) {
+    // Clipboard API can be blocked (permissions/older browsers) — fall back
+    // to a hidden textarea + execCommand.
+    const ta = document.createElement('textarea');
+    ta.value = md;
+    ta.style.cssText = 'position:fixed;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('✓ Copied — in Google Docs use Edit → Paste from Markdown');
+    } catch (e2) {
+      showToast('Copy failed — your browser blocked clipboard access');
+    }
+    ta.remove();
+  }
 }
 
 function formatQty(qty, unit) {
