@@ -980,38 +980,61 @@ async function loadAppData() {
   return migrateFromOldKeys();
 }
 
-async function saveAppData(data) {
-  // Always update local cache immediately
+const PAGE_ID = 'ingredients';
+
+// Authoritative read for saves — NO cache fallback. If we can't read the true
+// server state we abort the save rather than write our change on top of stale
+// data (which reverts other people's edits and drops change-log lines).
+async function loadForSave() {
+  const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+  if (!rows || !rows.length || !rows[0].data) throw new Error('empty server response');
+  const data = rows[0].data;
   localStorage.setItem(LS_KEY, JSON.stringify(data));
-  // Save to Supabase
-  try {
-    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
-    lastFailedSaveData = null;
-    hideSaveErrorBanner();
-  } catch(e) {
-    console.warn('Supabase save failed, data cached locally:', e.message);
-    lastFailedSaveData = data;
-    showSaveErrorBanner();
-  }
+  return data;
 }
 
-// A failed save is otherwise silent — it's cached locally and the page
-// looks fine, but nothing reached Supabase, so it's invisible to every
-// other device until it gets clobbered by their next save. Surface it.
-let lastFailedSaveData = null;
-function showSaveErrorBanner() {
-  if (document.getElementById('save-error-banner')) return;
-  const el = document.createElement('div');
-  el.id = 'save-error-banner';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
-  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
-    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
-  document.body.appendChild(el);
-  document.getElementById('save-error-retry').onclick = async () => {
-    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
-  };
+// Read-modify-write against authoritative state. mutate(data) edits a FRESH
+// server copy and returns { onSuccess } to run only after the write is
+// confirmed. Any failure => nothing persisted, blocking banner, local state
+// untouched so Retry re-attempts cleanly.
+let pendingSaveRetry = null;
+async function commitSave(mutate) {
+  let data;
+  try { data = await loadForSave(); }
+  catch(e) { pendingSaveRetry = () => commitSave(mutate); showUnsavedError('Not saved — can’t reach the server. Your last change is only on this screen. Keep this tab open and click Retry.'); throw e; }
+  const result = mutate(data) || {};
+  try { await saveAppData(data); }
+  catch(e) { pendingSaveRetry = () => commitSave(mutate); showUnsavedError('Save failed — your last change did NOT save. Click Retry.'); throw e; }
+  pendingSaveRetry = null; hideUnsavedError();
+  if (typeof result.onSuccess === 'function') result.onSuccess();
+  return data;
 }
-function hideSaveErrorBanner() {
+
+// Writes to Supabase and THROWS if it doesn't land. Mirrors to the local cache
+// only AFTER a confirmed write, so the cache can never hold edits the server
+// never accepted. Stamps provenance metadata read by the Diagnostics panel.
+async function saveAppData(data) {
+  data._meta = { rev: ((data._meta && data._meta.rev) || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID };
+  await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+}
+
+// A failed save must be impossible to miss: a persistent red bar that stays up
+// until a save actually succeeds. Retry re-runs the exact operation that failed
+// (re-reading fresh server state) — never a stale cached payload.
+function showUnsavedError(msg) {
+  let el = document.getElementById('save-error-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'save-error-banner';
+    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:99999;box-shadow:0 -2px 12px rgba(0,0,0,0.25);';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠ <span id="save-error-msg"></span> <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>';
+  el.querySelector('#save-error-msg').textContent = msg;
+  document.getElementById('save-error-retry').onclick = () => { if (pendingSaveRetry) pendingSaveRetry().catch(()=>{}); };
+}
+function hideUnsavedError() {
   const el = document.getElementById('save-error-banner');
   if (el) el.remove();
 }
@@ -1182,7 +1205,7 @@ function mergeById(freshList, localList, snaps, deletedIds, collection, fields, 
     if (!mergedIds.has(i.id) && !deletedIds.has(i.id) && dirty.has(i.id)) { if (logOut) diffScalarFields(null, i, collection, fields, logOut); merged.push(i); }
   });
   deletedIds.forEach(id => { const gone = freshById.get(id); if (gone && logOut) logOut.push(makeLogEntry({ collection, itemId:id, item:itemLabel(gone), field:'(deleted)', from:itemLabel(gone), to:null, action:'delete' })); });
-  deletedIds.clear();
+  // NB: caller clears deletedIds only after the write is confirmed (see save()).
   return merged;
 }
 
@@ -1192,19 +1215,31 @@ async function save(opts) {
   // session never touched. opts.suppressItemLog skips per-row logging (used by
   // bulk import, which logs a single summary line instead).
   opts = opts || {};
-  const data = await loadAppData();
-  const logEntries = opts.suppressItemLog ? null : [];
-  spirits = mergeById(data.spirits || [], spirits, spiritSnapshots, deletedSpiritIds, 'spirit', ['brand','name','subcategory','distributor','cost','sizeML','costPerOz'], logEntries);
-  otherIngredients = mergeById(data.otherIngredients || [], otherIngredients, otherSnapshots, deletedOtherIngredientIds, 'ingredient', ['name','category','sizeOz','cost','costPerOz','notes'], logEntries);
-  spiritSnapshots = snapList(spirits);
-  otherSnapshots = snapList(otherIngredients);
-  data.spirits = spirits;
-  data.otherIngredients = otherIngredients;
-  if (importMeta) data.importMeta = importMeta;
-  const entries = logEntries || [];
-  if (opts.summaryEntry) entries.push(opts.summaryEntry);
-  appendChangeLog(data, entries);
-  await saveAppData(data);
+  try {
+    await commitSave((data) => {
+      const logEntries = opts.suppressItemLog ? null : [];
+      const mergedSpirits = mergeById(data.spirits || [], spirits, spiritSnapshots, deletedSpiritIds, 'spirit', ['brand','name','subcategory','distributor','cost','sizeML','costPerOz'], logEntries);
+      const mergedOther = mergeById(data.otherIngredients || [], otherIngredients, otherSnapshots, deletedOtherIngredientIds, 'ingredient', ['name','category','sizeOz','cost','costPerOz','notes'], logEntries);
+      data.spirits = mergedSpirits;
+      data.otherIngredients = mergedOther;
+      if (importMeta) data.importMeta = importMeta;
+      const entries = logEntries || [];
+      if (opts.summaryEntry) entries.push(opts.summaryEntry);
+      appendChangeLog(data, entries);
+      // Adopt merged copies as the new baseline only after a confirmed write —
+      // otherwise a failed save would drop dirty flags / pending deletions.
+      return { onSuccess: () => {
+        spirits = mergedSpirits;
+        otherIngredients = mergedOther;
+        spiritSnapshots = snapList(spirits);
+        otherSnapshots = snapList(otherIngredients);
+        deletedSpiritIds.clear();
+        deletedOtherIngredientIds.clear();
+      }};
+    });
+  } catch(e) {
+    // Failure already surfaced by commitSave; local edits stay dirty for Retry.
+  }
 }
 
 async function load() {

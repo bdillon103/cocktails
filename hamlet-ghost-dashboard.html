@@ -276,19 +276,41 @@ async function loadAppData() {
   return migrateFromOldKeys();
 }
 
-async function saveAppData(data) {
-  // Always update local cache immediately
+const PAGE_ID = 'dashboard';
+
+// Authoritative read for saves — NO cache fallback. If we can't read the true
+// server state we abort rather than write our change on top of stale data.
+async function loadForSave() {
+  const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+  if (!rows || !rows.length || !rows[0].data) throw new Error('empty server response');
+  const data = rows[0].data;
   localStorage.setItem(LS_KEY, JSON.stringify(data));
-  // Save to Supabase
-  try {
-    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
-    lastFailedSaveData = null;
-    hideSaveErrorBanner();
-  } catch(e) {
-    console.warn('Supabase save failed, data cached locally:', e.message);
-    lastFailedSaveData = data;
-    showSaveErrorBanner();
-  }
+  return data;
+}
+
+// Read-modify-write against authoritative state. mutate(data) edits a FRESH
+// server copy and returns { onSuccess } to run only after the write is
+// confirmed. Any failure => nothing persisted, blocking banner, local state
+// untouched so Retry re-attempts cleanly.
+let pendingSaveRetry = null;
+async function commitSave(mutate) {
+  let data;
+  try { data = await loadForSave(); }
+  catch(e) { pendingSaveRetry = () => commitSave(mutate); showUnsavedError('Not saved — can’t reach the server. Your last change is only on this screen. Keep this tab open and click Retry.'); throw e; }
+  const result = mutate(data) || {};
+  try { await saveAppData(data); }
+  catch(e) { pendingSaveRetry = () => commitSave(mutate); showUnsavedError('Save failed — your last change did NOT save. Click Retry.'); throw e; }
+  pendingSaveRetry = null; hideUnsavedError();
+  if (typeof result.onSuccess === 'function') result.onSuccess();
+  return data;
+}
+
+// Writes to Supabase and THROWS if it doesn't land. Mirrors to the local cache
+// only AFTER a confirmed write. Stamps provenance metadata for Diagnostics.
+async function saveAppData(data) {
+  data._meta = { rev: ((data._meta && data._meta.rev) || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID };
+  await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
 
 // ─── CHANGE LOG (shared audit trail, stored in the app_data blob) ─────────────
@@ -326,23 +348,22 @@ function appendChangeLog(data, entries) {
   data.changeLog = log;
 }
 
-// A failed save is otherwise silent — it's cached locally and the page
-// looks fine, but nothing reached Supabase, so it's invisible to every
-// other device until it gets clobbered by their next save. Surface it.
-let lastFailedSaveData = null;
-function showSaveErrorBanner() {
-  if (document.getElementById('save-error-banner')) return;
-  const el = document.createElement('div');
-  el.id = 'save-error-banner';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
-  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
-    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
-  document.body.appendChild(el);
-  document.getElementById('save-error-retry').onclick = async () => {
-    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
-  };
+// A failed save must be impossible to miss: a persistent red bar that stays up
+// until a save actually succeeds. Retry re-runs the exact operation that failed
+// (re-reading fresh server state) — never a stale cached payload.
+function showUnsavedError(msg) {
+  let el = document.getElementById('save-error-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'save-error-banner';
+    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:99999;box-shadow:0 -2px 12px rgba(0,0,0,0.25);';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠ <span id="save-error-msg"></span> <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>';
+  el.querySelector('#save-error-msg').textContent = msg;
+  document.getElementById('save-error-retry').onclick = () => { if (pendingSaveRetry) pendingSaveRetry().catch(()=>{}); };
 }
-function hideSaveErrorBanner() {
+function hideUnsavedError() {
   const el = document.getElementById('save-error-banner');
   if (el) el.remove();
 }
@@ -471,24 +492,27 @@ async function saveSalesData() {
   // Start from the authoritative remote counts and overlay ONLY the entries
   // this session actually edited, so a stale count can't revert someone
   // else's number. Records each change to the shared audit log.
-  const data = await loadAppData();
-  const remoteSales = data.salesData || {};
-  const logEntries = [];
-  const merged = { ...remoteSales };
-  dirtySalesKeys.forEach(id => {
-    const from = remoteSales[id] ?? 0;
-    const to = salesData[id] ?? 0;
-    if (from !== to) {
-      const rec = allRecipes.find(r => r.id === id);
-      logEntries.push(makeLogEntry({ collection:'sales', itemId:id, item:(rec && rec.name) || id, field:'units sold', from, to }));
-    }
-    merged[id] = salesData[id] ?? 0;
-  });
-  dirtySalesKeys.clear();
-  salesData = merged;
-  data.salesData = merged;
-  appendChangeLog(data, logEntries);
-  await saveAppData(data);
+  try {
+    await commitSave((data) => {
+      const remoteSales = data.salesData || {};
+      const logEntries = [];
+      const merged = { ...remoteSales };
+      dirtySalesKeys.forEach(id => {
+        const from = remoteSales[id] ?? 0;
+        const to = salesData[id] ?? 0;
+        if (from !== to) {
+          const rec = allRecipes.find(r => r.id === id);
+          logEntries.push(makeLogEntry({ collection:'sales', itemId:id, item:(rec && rec.name) || id, field:'units sold', from, to }));
+        }
+        merged[id] = salesData[id] ?? 0;
+      });
+      data.salesData = merged;
+      appendChangeLog(data, logEntries);
+      return { onSuccess: () => { dirtySalesKeys.clear(); salesData = merged; } };
+    });
+  } catch(e) {
+    // Failure already surfaced by commitSave; dirty keys stay for Retry.
+  }
 }
 
 // ─── COSTING ─────────────────────────────────────────────────────────────────
@@ -709,13 +733,17 @@ async function applyPrice(id, price) {
   // Change ONLY this recipe's price on top of the authoritative remote list,
   // so nothing else this session is holding gets re-asserted over a
   // concurrent edit from the Recipe Builder or another device.
-  const apData = await loadAppData();
-  const freshRecipes = apData.recipes || [];
-  const target = freshRecipes.find(x => x.id === id);
-  const fromPrice = target ? (target.menuPrice ?? null) : (r.menuPrice ?? null);
-  apData.recipes = freshRecipes.map(x => x.id === id ? { ...x, menuPrice: newPrice } : x);
-  appendChangeLog(apData, [ makeLogEntry({ collection:'recipe', itemId:id, item:(target && target.name) || r.name, field:'menuPrice', from:fromPrice, to:newPrice }) ]);
-  await saveAppData(apData);
+  try {
+    await commitSave((apData) => {
+      const freshRecipes = apData.recipes || [];
+      const target = freshRecipes.find(x => x.id === id);
+      const fromPrice = target ? (target.menuPrice ?? null) : (r.menuPrice ?? null);
+      apData.recipes = freshRecipes.map(x => x.id === id ? { ...x, menuPrice: newPrice } : x);
+      appendChangeLog(apData, [ makeLogEntry({ collection:'recipe', itemId:id, item:(target && target.name) || r.name, field:'menuPrice', from:fromPrice, to:newPrice }) ]);
+    });
+  } catch(e) {
+    return; // failure surfaced by banner; don't reload/toast as if it worked
+  }
   await loadData();
   renderAll();
   showToast(`✓ ${r.name} price updated to $${price}`);

@@ -162,6 +162,7 @@
       <div class="page-sub">Create seasonal menus, assign recipes, save and restore backups</div>
     </div>
     <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="openDiagnostics().catch(e=>console.error(e))"><i class="ti ti-stethoscope"></i> Diagnostics</button>
       <button class="btn" onclick="openChangeLog().catch(e=>console.error(e))"><i class="ti ti-history"></i> Change log</button>
       <button class="btn" onclick="openBackupModal().catch(e=>console.error(e))"><i class="ti ti-archive"></i> Backups</button>
       <button class="btn btn-primary" onclick="openNewMenuModal()"><i class="ti ti-plus"></i> New menu</button>
@@ -264,6 +265,26 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('section-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveSectionLabel()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DIAGNOSTICS MODAL -->
+<div class="modal-overlay" id="diagnostics-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">Sync diagnostics</div>
+      <button class="icon-btn" onclick="closeModal('diagnostics-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center;">
+        <button class="btn btn-sm" onclick="renderDiagnostics().catch(e=>console.error(e))"><i class="ti ti-refresh"></i> Refresh</button>
+        <span style="font-size:12px;color:var(--ink-light);">Reads the live server row — the single source of truth. If a tab shows something different, that tab is stale; reload it.</span>
+      </div>
+      <div id="diagnostics-body" style="max-height:62vh;overflow-y:auto;font-size:13px;">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('diagnostics-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -453,38 +474,61 @@ async function loadAppData() {
   return migrateFromOldKeys();
 }
 
-async function saveAppData(data) {
-  // Always update local cache immediately
+const PAGE_ID = 'menus';
+
+// Authoritative read for saves — NO cache fallback. If we can't read the true
+// server state we abort the save rather than write our change on top of stale
+// data (which reverts other people's edits and drops change-log lines).
+async function loadForSave() {
+  const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+  if (!rows || !rows.length || !rows[0].data) throw new Error('empty server response');
+  const data = rows[0].data;
   localStorage.setItem(LS_KEY, JSON.stringify(data));
-  // Save to Supabase
-  try {
-    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
-    lastFailedSaveData = null;
-    hideSaveErrorBanner();
-  } catch(e) {
-    console.warn('Supabase save failed, data cached locally:', e.message);
-    lastFailedSaveData = data;
-    showSaveErrorBanner();
-  }
+  return data;
 }
 
-// A failed save is otherwise silent — it's cached locally and the page
-// looks fine, but nothing reached Supabase, so it's invisible to every
-// other device until it gets clobbered by their next save. Surface it.
-let lastFailedSaveData = null;
-function showSaveErrorBanner() {
-  if (document.getElementById('save-error-banner')) return;
-  const el = document.createElement('div');
-  el.id = 'save-error-banner';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
-  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
-    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
-  document.body.appendChild(el);
-  document.getElementById('save-error-retry').onclick = async () => {
-    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
-  };
+// Read-modify-write against authoritative state. mutate(data) edits a FRESH
+// server copy and returns { onSuccess } to run only after the write is
+// confirmed. Any failure => nothing persisted, blocking banner, local state
+// untouched so Retry re-attempts cleanly.
+let pendingSaveRetry = null;
+async function commitSave(mutate) {
+  let data;
+  try { data = await loadForSave(); }
+  catch(e) { pendingSaveRetry = () => commitSave(mutate); showUnsavedError('Not saved — can’t reach the server. Your last change is only on this screen. Keep this tab open and click Retry.'); throw e; }
+  const result = mutate(data) || {};
+  try { await saveAppData(data); }
+  catch(e) { pendingSaveRetry = () => commitSave(mutate); showUnsavedError('Save failed — your last change did NOT save. Click Retry.'); throw e; }
+  pendingSaveRetry = null; hideUnsavedError();
+  if (typeof result.onSuccess === 'function') result.onSuccess();
+  return data;
 }
-function hideSaveErrorBanner() {
+
+// Writes to Supabase and THROWS if it doesn't land. Mirrors to the local cache
+// only AFTER a confirmed write, so the cache can never hold edits the server
+// never accepted. Stamps provenance metadata read by the Diagnostics panel.
+async function saveAppData(data) {
+  data._meta = { rev: ((data._meta && data._meta.rev) || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID };
+  await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+}
+
+// A failed save must be impossible to miss: a persistent red bar that stays up
+// until a save actually succeeds. Retry re-runs the exact operation that failed
+// (re-reading fresh server state) — never a stale cached payload.
+function showUnsavedError(msg) {
+  let el = document.getElementById('save-error-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'save-error-banner';
+    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:99999;box-shadow:0 -2px 12px rgba(0,0,0,0.25);';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠ <span id="save-error-msg"></span> <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>';
+  el.querySelector('#save-error-msg').textContent = msg;
+  document.getElementById('save-error-retry').onclick = () => { if (pendingSaveRetry) pendingSaveRetry().catch(()=>{}); };
+}
+function hideUnsavedError() {
   const el = document.getElementById('save-error-banner');
   if (el) el.remove();
 }
@@ -668,32 +712,38 @@ async function saveMenus() {
   // Override ONLY the menus this session actually edited (detected via
   // snapshot), so a stale in-memory copy can't revert another session's
   // change. Also records every change to the shared audit log.
-  const data = await loadAppData();
-  const freshMenus = data.menus || [];
-  const freshById = new Map(freshMenus.map(m => [m.id, m]));
-  const localById = new Map(menus.map(m => [m.id, m]));
-  const dirty = new Set();
-  menus.forEach(m => { const s = menuSnapshots.get(m.id); if (s === undefined || s !== JSON.stringify(m)) dirty.add(m.id); });
+  try {
+    await commitSave((data) => {
+      const freshMenus = data.menus || [];
+      const freshById = new Map(freshMenus.map(m => [m.id, m]));
+      const localById = new Map(menus.map(m => [m.id, m]));
+      const dirty = new Set();
+      menus.forEach(m => { const s = menuSnapshots.get(m.id); if (s === undefined || s !== JSON.stringify(m)) dirty.add(m.id); });
 
-  const logEntries = [];
-  const merged = freshMenus
-    .filter(m => !deletedMenuIds.has(m.id))
-    .map(m => {
-      if (dirty.has(m.id) && localById.has(m.id)) { collectMenuDiffs(m, localById.get(m.id), logEntries); return localById.get(m.id); }
-      return m;
+      const logEntries = [];
+      const merged = freshMenus
+        .filter(m => !deletedMenuIds.has(m.id))
+        .map(m => {
+          if (dirty.has(m.id) && localById.has(m.id)) { collectMenuDiffs(m, localById.get(m.id), logEntries); return localById.get(m.id); }
+          return m;
+        });
+      const mergedIds = new Set(merged.map(m => m.id));
+      menus.forEach(m => {
+        if (!mergedIds.has(m.id) && !deletedMenuIds.has(m.id)) { collectMenuDiffs(null, m, logEntries); merged.push(m); }
+      });
+      deletedMenuIds.forEach(id => { const gone = freshById.get(id); if (gone) logEntries.push(makeLogEntry({ collection:'menu', itemId:id, item:gone.name||'(menu)', field:'(deleted)', from:gone.name||'', to:null, action:'delete' })); });
+
+      appendChangeLog(data, logEntries);
+      data.menus = merged;
+      return { onSuccess: () => {
+        deletedMenuIds.clear();
+        menus = merged;
+        menuSnapshots = new Map(menus.map(m => [m.id, JSON.stringify(m)]));
+      }};
     });
-  const mergedIds = new Set(merged.map(m => m.id));
-  menus.forEach(m => {
-    if (!mergedIds.has(m.id) && !deletedMenuIds.has(m.id)) { collectMenuDiffs(null, m, logEntries); merged.push(m); }
-  });
-  deletedMenuIds.forEach(id => { const gone = freshById.get(id); if (gone) logEntries.push(makeLogEntry({ collection:'menu', itemId:id, item:gone.name||'(menu)', field:'(deleted)', from:gone.name||'', to:null, action:'delete' })); });
-
-  appendChangeLog(data, logEntries);
-  deletedMenuIds.clear();
-  menus = merged;
-  menuSnapshots = new Map(menus.map(m => [m.id, JSON.stringify(m)]));
-  data.menus = merged;
-  await saveAppData(data);
+  } catch(e) {
+    // Failure already surfaced by commitSave; local edits stay dirty for Retry.
+  }
 }
 
 // ─── COSTING ─────────────────────────────────────────────────────────────────
@@ -1161,14 +1211,18 @@ async function restoreBackup(e) {
         importMeta: data.importMeta || null,
         salesData: data.salesData || {}
       };
-      await saveAppData(restored);
+      // Preserve the shared audit log across a restore unless the backup
+      // carried its own (a restore shouldn't silently erase change history).
+      restored.changeLog = data.changeLog || [];
+      restored.specStylePresets = data.specStylePresets || [];
+      await saveAppData(restored);   // throws if the write doesn't land
       await loadManager();
       renderMenusList();
       const active = menus.find(m => m.isActive);
       if (active) selectMenu(active.id);
       showToast('✓ Backup restored successfully');
     } catch(err) {
-      showToast('Error reading backup file');
+      showToast('Restore failed — could not read the file or save to the server. Nothing was changed.');
     }
   };
   reader.readAsText(file);
@@ -1179,6 +1233,111 @@ async function openBackupModal() {
   document.getElementById('backup-modal').classList.add('open');
   // Small delay to let modal render before populating
   setTimeout(() => renderBackupList(), 50);
+}
+
+// ─── DIAGNOSTICS ──────────────────────────────────────────────────────────────
+async function openDiagnostics() {
+  document.getElementById('diagnostics-modal').classList.add('open');
+  await renderDiagnostics();
+}
+
+function fmtAgo(ts) {
+  if (!ts) return '—';
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.round(s/60) + 'm ago';
+  if (s < 86400) return Math.round(s/3600) + 'h ago';
+  return Math.round(s/86400) + 'd ago';
+}
+
+async function renderDiagnostics() {
+  const body = document.getElementById('diagnostics-body');
+  body.innerHTML = 'Reading live server row…';
+
+  // Capture this tab's cached revision BEFORE the read — loadForSave refreshes
+  // the cache, which would otherwise mask whether this tab was behind.
+  const cached = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch(e) { return null; } })();
+
+  // The one source of truth: read the server directly (no cache fallback).
+  let server, readError = null;
+  try { server = await loadForSave(); }
+  catch(e) { readError = e.message || String(e); }
+
+  const sess = getSession();
+  const tokenExp = sess && sess.expires_at ? sess.expires_at * 1000 : null;
+  const tokenMins = tokenExp ? Math.round((tokenExp - Date.now()) / 60000) : null;
+
+  const box = (label, val, warn) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border);">
+    <span style="color:var(--ink-light);">${esc(label)}</span>
+    <span style="font-family:var(--mono);text-align:right;${warn ? 'color:var(--accent);font-weight:500;' : ''}">${val}</span></div>`;
+
+  let html = '';
+
+  // Session / connection health
+  html += `<div style="font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-light);margin:4px 0 6px;">This device</div>`;
+  html += box('Signed in as', esc(currentUserEmail()));
+  html += box('Login token', tokenMins === null ? 'unknown' : (tokenMins > 0 ? `valid ~${tokenMins} min` : 'EXPIRED — reload the page'), tokenMins !== null && tokenMins <= 0);
+  html += box('Server reachable', readError ? 'NO' : 'yes', !!readError);
+  if (readError) html += box('Read error', esc(readError), true);
+
+  if (server) {
+    const m = server._meta || {};
+    // Provenance of the last write
+    html += `<div style="font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-light);margin:14px 0 6px;">Server (source of truth)</div>`;
+    html += box('Last saved', `${fmtAgo(m.at)}${m.at ? ' · ' + new Date(m.at).toLocaleString() : ''}`);
+    html += box('Last saved by', esc(m.by || 'unknown') + (m.from ? ` (${esc(m.from)})` : ''));
+    html += box('Revision', m.rev != null ? '#' + m.rev : '—');
+    // Is this tab's cache behind the server?
+    const cachedRev = cached && cached._meta ? cached._meta.rev : null;
+    const behind = cachedRev != null && m.rev != null && cachedRev < m.rev;
+    html += box('This tab’s cached rev', cachedRev != null ? '#' + cachedRev + (behind ? ' — STALE, reload' : ' (current)') : '—', behind);
+
+    // Counts
+    html += `<div style="font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-light);margin:14px 0 6px;">Counts on server</div>`;
+    html += box('Recipes', (server.recipes||[]).length);
+    html += box('Menus', (server.menus||[]).length);
+    html += box('Spirits', (server.spirits||[]).length);
+    html += box('Other ingredients', (server.otherIngredients||[]).length);
+    html += box('Change-log entries', (server.changeLog||[]).length);
+
+    // Recipe lookup — inspect a recipe's persisted ingredients directly
+    html += `<div style="font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-light);margin:14px 0 6px;">Inspect a recipe on the server</div>`;
+    html += `<input type="text" id="diag-recipe-search" placeholder="Type a cocktail name…" oninput="renderDiagRecipe()"
+      style="width:100%;height:32px;border:1px solid var(--border-mid);border-radius:6px;padding:0 10px;font-family:var(--sans);font-size:13px;outline:none;box-sizing:border-box;margin-bottom:8px;">
+      <div id="diag-recipe-result" style="font-size:12px;color:var(--ink-light);">Start typing to see a recipe’s exact saved ingredients & price.</div>`;
+
+    // Recent change-log tail
+    const tail = (server.changeLog||[]).slice(-12).reverse();
+    html += `<div style="font-family:var(--mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-light);margin:14px 0 6px;">Most recent changes on server</div>`;
+    html += tail.length ? tail.map(e => `<div style="padding:5px 0;border-bottom:1px solid var(--border);">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--ink-light);">${fmtAgo(e.ts)}</span>
+        · <b>${esc(e.item||'')}</b> <span style="color:var(--ink-light);">${esc(e.field||'')}</span>
+        ${e.from!=null||e.to!=null ? `<span style="font-family:var(--mono);font-size:11px;"> ${esc(String(e.from))} → ${esc(String(e.to))}</span>` : ''}
+        <span style="color:var(--ink-light);font-size:11px;"> — ${esc(e.user||'')}</span></div>`).join('')
+      : '<div style="color:var(--ink-light);">No changes recorded yet.</div>';
+  }
+
+  body.innerHTML = html;
+  window.__diagServer = server || null;
+}
+
+function renderDiagRecipe() {
+  const q = (document.getElementById('diag-recipe-search').value || '').trim().toLowerCase();
+  const el = document.getElementById('diag-recipe-result');
+  const server = window.__diagServer;
+  if (!server || !q) { el.innerHTML = 'Start typing to see a recipe’s exact saved ingredients & price.'; return; }
+  const matches = (server.recipes||[]).filter(r => (r.name||'').toLowerCase().includes(q)).slice(0, 5);
+  if (!matches.length) { el.innerHTML = `No recipe on the server matches “${esc(q)}”.`; return; }
+  el.innerHTML = matches.map(r => {
+    const ings = (r.ingredients||[]).map(i => {
+      if (i.isBatchGroup) return `<li><i>${esc(i.batchName||'Batch')}</i></li>`;
+      return `<li>${esc(((i.qty!=null?i.qty:'') + ' ' + (i.unit||'')).trim())} ${esc(i.ingredientName||'')}</li>`;
+    }).join('');
+    return `<div style="margin-bottom:8px;padding:8px;border:1px solid var(--border);border-radius:6px;">
+      <div style="font-weight:500;">${esc(r.name||'Untitled')} <span style="color:var(--ink-light);font-weight:400;">· $${r.menuPrice!=null?r.menuPrice:'—'}</span></div>
+      <ul style="margin:4px 0 0;padding-left:18px;">${ings || '<li style="color:var(--ink-light);">no ingredients</li>'}</ul>
+    </div>`;
+  }).join('');
 }
 
 // ─── CHANGE LOG VIEWER ────────────────────────────────────────────────────────

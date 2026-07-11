@@ -285,40 +285,18 @@ async function loadAppData() {
   return migrateFromOldKeys();
 }
 
-async function saveAppData(data) {
-  // Always update local cache immediately
-  localStorage.setItem(LS_KEY, JSON.stringify(data));
-  // Save to Supabase
-  try {
-    await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
-    lastFailedSaveData = null;
-    hideSaveErrorBanner();
-  } catch(e) {
-    console.warn('Supabase save failed, data cached locally:', e.message);
-    lastFailedSaveData = data;
-    showSaveErrorBanner();
-  }
+// NB: the Menu Grid is read-only — it never writes the blob — but it keeps the
+// same hardened data layer as the other pages for consistency.
+const PAGE_ID = 'grid';
+function currentUserEmail() {
+  try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
+  catch(e) { return 'unknown'; }
 }
 
-// A failed save is otherwise silent — it's cached locally and the page
-// looks fine, but nothing reached Supabase, so it's invisible to every
-// other device until it gets clobbered by their next save. Surface it.
-let lastFailedSaveData = null;
-function showSaveErrorBanner() {
-  if (document.getElementById('save-error-banner')) return;
-  const el = document.createElement('div');
-  el.id = 'save-error-banner';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c8392b;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:10px 16px;text-align:center;z-index:9999;box-shadow:0 -2px 8px rgba(0,0,0,0.15);';
-  el.innerHTML = `⚠ Changes aren't syncing — check your connection. Your edits are only saved on this device until this clears.
-    <button id="save-error-retry" style="margin-left:10px;background:#fff;color:#c8392b;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Retry now</button>`;
-  document.body.appendChild(el);
-  document.getElementById('save-error-retry').onclick = async () => {
-    if (lastFailedSaveData) await saveAppData(lastFailedSaveData);
-  };
-}
-function hideSaveErrorBanner() {
-  const el = document.getElementById('save-error-banner');
-  if (el) el.remove();
+async function saveAppData(data) {
+  data._meta = { rev: ((data._meta && data._meta.rev) || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID };
+  await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
 
 function migrateFromOldKeys() {
