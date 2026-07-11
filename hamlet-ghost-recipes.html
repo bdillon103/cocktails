@@ -791,6 +791,15 @@ function appendChangeLog(data, entries) {
 }
 function flattenIngredients(r) {
   const map = {};
+  // Bar prep recipes keep their ingredients in bpIngredients (not ingredients),
+  // so diff those or their edits never reach the change log.
+  if (r && r.recipeType === 'barprep') {
+    (r.bpIngredients || []).forEach(ing => {
+      const k = ing.name || ing.ingredientName;
+      if (k) map[k] = ((ing.qty||'') + ' ' + (ing.unit||'')).trim();
+    });
+    return map;
+  }
   (r.ingredients || []).forEach(ing => {
     if (ing.isBatchGroup) {
       (ing.children || []).forEach(c => { const k = c.ingredientName || c.ingredientId; if (k) map[k] = ((c.qty||'') + ' ' + (c.unit||'')).trim(); });
@@ -814,6 +823,13 @@ function collectRecipeDiffs(oldR, newR, out) {
   new Set([...Object.keys(A), ...Object.keys(B)]).forEach(k => {
     if (A[k] !== B[k]) out.push(makeLogEntry({ collection:'recipe', itemId:id, item:name, field:k + ' (amount)', from:A[k] || null, to:B[k] || null }));
   });
+  // Bar prep method steps are editable too — log those changes as well.
+  if (newR.recipeType === 'barprep' || oldR.recipeType === 'barprep') {
+    const sa = oldR.bpSteps || [], sb = newR.bpSteps || [];
+    for (let i = 0; i < Math.max(sa.length, sb.length); i++) {
+      if ((sa[i] || '') !== (sb[i] || '')) out.push(makeLogEntry({ collection:'recipe', itemId:id, item:name, field:'step ' + (i+1), from:sa[i] || null, to:sb[i] || null }));
+    }
+  }
 }
 
 function snapshotRecipes() {
