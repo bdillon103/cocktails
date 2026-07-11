@@ -442,6 +442,35 @@ async function loadAppData() {
 }
 
 const PAGE_ID = 'recipes';
+// Bump APP_BUILD and version.json together on every deploy. A tab running an
+// older build than version.json is refused writes (see checkAppVersion) so a
+// stale, still-open tab can't overwrite with outdated logic.
+const APP_BUILD = 1;
+let appIsStale = false;
+
+// Poll the deployed build marker (cache-busted). If this tab is behind, block
+// it. Fails OPEN: a network hiccup reading version.json never blocks saves.
+async function checkAppVersion() {
+  try {
+    const res = await fetch('version.json?ts=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const j = await res.json();
+    if (typeof j.build === 'number' && j.build > APP_BUILD) {
+      appIsStale = true;
+      showStaleOverlay(j.build);
+    }
+  } catch(e) { /* fail open */ }
+}
+function showStaleOverlay(latest) {
+  if (document.getElementById('stale-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'stale-overlay';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(26,24,18,0.92);color:#f5f2ec;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:"DM Mono",monospace;padding:2rem;';
+  el.innerHTML = '<div style="font-size:15px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">This page is out of date</div>'
+    + '<div style="font-size:13px;max-width:420px;line-height:1.6;opacity:0.85;margin-bottom:1.5rem;">A newer version has been published (build ' + latest + '; this tab is build ' + APP_BUILD + '). To protect the data, saving is paused on this tab until you reload.</div>'
+    + '<button onclick="location.reload(true)" style="background:#c8392b;color:#fff;border:none;border-radius:6px;padding:10px 22px;font-family:inherit;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Reload now</button>';
+  document.body.appendChild(el);
+}
 
 // For SAVING: authoritative read with NO cache fallback. If we can't read the
 // real current server state we must ABORT the save — merging our change onto a
@@ -455,45 +484,109 @@ async function loadForSave() {
   return data;
 }
 
-// Read-modify-write against authoritative server state. `mutate(data)` edits a
-// FRESH server copy and returns { onSuccess } to run only once the write is
-// confirmed. On any failure nothing is persisted, a blocking banner appears,
-// and local state is left untouched so Retry re-attempts cleanly.
-let pendingSaveRetry = null;
-async function commitSave(mutate) {
-  let data;
+function stampMeta(data, baseRev) {
+  data._meta = { rev: (baseRev || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID, build: APP_BUILD };
+}
+
+// Low-level PATCH returning the updated rows (Prefer: return=representation).
+// With a baseRev it's CONDITIONAL on the server revision still matching — a
+// compare-and-swap, so two people writing at the same instant can't lose each
+// other's update. Empty result = the row's rev already moved on (conflict).
+let casMode = 'auto'; // 'auto' = try conditional; 'off' = filter unsupported here
+async function patchRows(data, baseRev) {
+  const session = await getValidSession();
+  const headers = {
+    'apikey': SUPABASE_KEY, 'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`,
+    'Prefer': 'return=representation'
+  };
+  const cond = baseRev != null ? `&data->_meta->>rev=eq.${baseRev}` : '';
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_data?id=eq.main${cond}`, {
+    method: 'PATCH', headers, body: JSON.stringify({ data })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text().catch(()=>'')).slice(0, 140));
+  return res.json().catch(() => null);
+}
+// Returns true if written, false on CAS conflict (caller re-reads & retries).
+// Self-heals: if the conditional filter isn't supported by this PostgREST it
+// errors → we disable CAS and write unconditionally, so saves never break.
+async function writeBlob(data, baseRev) {
+  stampMeta(data, baseRev);
+  const useCond = casMode === 'auto' && baseRev != null;
   try {
-    data = await loadForSave();
+    const rows = await patchRows(data, useCond ? baseRev : null);
+    if (useCond && Array.isArray(rows) && rows.length === 0) return false; // real conflict
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+    return true;
   } catch(e) {
-    pendingSaveRetry = () => commitSave(mutate);
-    showUnsavedError('Not saved — can’t reach the server. Your last change is only on this screen. Keep this tab open and click Retry.');
+    if (useCond) {
+      casMode = 'off';                 // conditional filter rejected — stop using it
+      await patchRows(data, null);     // unconditional retry (may throw = real failure)
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+      return true;
+    }
     throw e;
   }
-  const result = mutate(data) || {};
+}
+
+// Read-modify-write against authoritative server state. `mutate(data)` edits a
+// FRESH server copy and returns { onSuccess } to run only once the write is
+// confirmed. Retries on a compare-and-swap conflict (someone wrote between our
+// read and write) by re-reading and re-merging. On failure nothing is persisted,
+// a blocking banner appears, and local state is untouched so Retry is clean.
+let pendingSaveRetry = null;
+async function commitSave(mutate) {
+  if (appIsStale) { showStaleOverlay(APP_BUILD + 1); throw new Error('app out of date'); }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let data;
+    try {
+      data = await loadForSave();
+    } catch(e) {
+      pendingSaveRetry = () => commitSave(mutate);
+      showUnsavedError('Not saved — can’t reach the server. Your last change is only on this screen. Keep this tab open and click Retry.');
+      throw e;
+    }
+    const baseRev = (data._meta && data._meta.rev) || 0;
+    const result = mutate(data) || {};
+    let ok;
+    try {
+      ok = await writeBlob(data, baseRev);
+    } catch(e) {
+      pendingSaveRetry = () => commitSave(mutate);
+      showUnsavedError('Save failed — your last change did NOT save. Click Retry.');
+      throw e;
+    }
+    if (ok) {
+      pendingSaveRetry = null;
+      hideUnsavedError();
+      if (typeof result.onSuccess === 'function') result.onSuccess();
+      return data;
+    }
+    // CAS conflict: another write landed first. Loop re-reads fresh & re-merges.
+  }
+  // Exhausted CAS retries — either a genuine hot spot of concurrent edits, or the
+  // conditional filter isn't discriminating on this backend. Disable CAS and do
+  // one authoritative last-resort write so the change is never lost or stuck.
+  casMode = 'off';
   try {
-    await saveAppData(data);
+    const data = await loadForSave();
+    const result = mutate(data) || {};
+    await saveAppData(data);   // unconditional; stamps rev = serverRev+1
+    pendingSaveRetry = null; hideUnsavedError();
+    if (typeof result.onSuccess === 'function') result.onSuccess();
+    return data;
   } catch(e) {
     pendingSaveRetry = () => commitSave(mutate);
     showUnsavedError('Save failed — your last change did NOT save. Click Retry.');
     throw e;
   }
-  pendingSaveRetry = null;
-  hideUnsavedError();
-  if (typeof result.onSuccess === 'function') result.onSuccess();
-  return data;
 }
 
-// Writes to Supabase and THROWS if it doesn't land. Mirrors to the local cache
-// only AFTER a confirmed write, so the cache can never hold edits the server
-// never accepted. Stamps provenance metadata read by the Diagnostics panel.
+// Unconditional stamped write — used by full-overwrite paths (e.g. restore) and
+// as the CAS fallback. Mirrors to the local cache only after a confirmed write.
 async function saveAppData(data) {
-  data._meta = {
-    rev: ((data._meta && data._meta.rev) || 0) + 1,
-    at: Date.now(),
-    by: currentUserEmail(),
-    from: PAGE_ID
-  };
-  await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  stampMeta(data, (data._meta && data._meta.rev) || 0);
+  await patchRows(data, null);
   localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
 
@@ -516,6 +609,10 @@ function hideUnsavedError() {
   const el = document.getElementById('save-error-banner');
   if (el) el.remove();
 }
+
+// Kick off the version watch (on load + every 2 min).
+checkAppVersion();
+setInterval(checkAppVersion, 120000);
 
 function migrateFromOldKeys() {
   // Migrate from old separate localStorage keys

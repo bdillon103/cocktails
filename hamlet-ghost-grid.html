@@ -288,16 +288,42 @@ async function loadAppData() {
 // NB: the Menu Grid is read-only — it never writes the blob — but it keeps the
 // same hardened data layer as the other pages for consistency.
 const PAGE_ID = 'grid';
+const APP_BUILD = 1;
+let appIsStale = false;
 function currentUserEmail() {
   try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
   catch(e) { return 'unknown'; }
 }
 
+// Read-only page, but still watch the deployed build so a long-open stale grid
+// tab prompts a reload (keeps everyone on current code).
+async function checkAppVersion() {
+  try {
+    const res = await fetch('version.json?ts=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const j = await res.json();
+    if (typeof j.build === 'number' && j.build > APP_BUILD) { appIsStale = true; showStaleOverlay(j.build); }
+  } catch(e) { /* fail open */ }
+}
+function showStaleOverlay(latest) {
+  if (document.getElementById('stale-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'stale-overlay';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(26,24,18,0.92);color:#f5f2ec;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:"DM Mono",monospace;padding:2rem;';
+  el.innerHTML = '<div style="font-size:15px;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">This page is out of date</div>'
+    + '<div style="font-size:13px;max-width:420px;line-height:1.6;opacity:0.85;margin-bottom:1.5rem;">A newer version has been published (build ' + latest + '; this tab is build ' + APP_BUILD + '). Reload to get the latest.</div>'
+    + '<button onclick="location.reload(true)" style="background:#c8392b;color:#fff;border:none;border-radius:6px;padding:10px 22px;font-family:inherit;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Reload now</button>';
+  document.body.appendChild(el);
+}
+
 async function saveAppData(data) {
-  data._meta = { rev: ((data._meta && data._meta.rev) || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID };
+  data._meta = { rev: ((data._meta && data._meta.rev) || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID, build: APP_BUILD };
   await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
   localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
+
+checkAppVersion();
+setInterval(checkAppVersion, 120000);
 
 function migrateFromOldKeys() {
   // Migrate from old separate localStorage keys
