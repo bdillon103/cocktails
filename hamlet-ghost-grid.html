@@ -288,7 +288,7 @@ async function loadAppData() {
 // NB: the Menu Grid is read-only — it never writes the blob — but it keeps the
 // same hardened data layer as the other pages for consistency.
 const PAGE_ID = 'grid';
-const APP_BUILD = 1;
+const APP_BUILD = 2;
 let appIsStale = false;
 function currentUserEmail() {
   try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }

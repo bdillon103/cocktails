@@ -523,7 +523,7 @@ function currentUserEmail() {
 }
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 1;
+const APP_BUILD = 2;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -941,7 +941,8 @@ function renderRecipeBlock(r, showMethod, showGarnish) {
           return `<li><span class="ing-qty-label"></span><span style="font-style:italic;color:#8a8680;">${esc(ing.batchName || 'Batch')}</span></li>`;
         }
         const qty = ing.qty ? formatQty(ing.qty, ing.unit) : '';
-        return `<li><span class="ing-qty-label">${esc(qty)}</span><span>${esc(ing.ingredientName || '')}</span></li>`;
+        const pour = ing.pourStyle === 'heavy' ? ' <span style="color:#c8392b;font-size:0.85em;">▲ heavy</span>' : ing.pourStyle === 'scant' ? ' <span style="color:#26608a;font-size:0.85em;">▼ scant</span>' : '';
+        return `<li><span class="ing-qty-label">${esc(qty)}</span><span>${esc(ing.ingredientName || '')}${pour}</span></li>`;
       }).join('')}
     </ul>
     ${showMethod && (r.style || r.glass || r.ice) ? `<div class="recipe-method">${[r.style, r.glass, r.ice].filter(Boolean).join(', ')}</div>` : ''}
@@ -1003,7 +1004,8 @@ function buildSpecMarkdown() {
       (r.ingredients || []).forEach(ing => {
         if (ing.isBatchGroup) { lines.push(`## *${ing.batchName || 'Batch'}*`, ''); return; }
         const qty = ing.qty ? formatQty(ing.qty, ing.unit) : '';
-        const line = [qty, ing.ingredientName || ''].filter(Boolean).join(' ').trim();
+        const pour = ing.pourStyle === 'heavy' ? ' [heavy]' : ing.pourStyle === 'scant' ? ' [scant]' : '';
+        const line = ([qty, ing.ingredientName || ''].filter(Boolean).join(' ').trim() + pour).trim();
         if (line) lines.push(`## ${line}`, '');
       });
       if (showMethod && (r.style || r.glass || r.ice)) lines.push(`### **${[r.style, r.glass, r.ice].filter(Boolean).join(', ')}**`, '');

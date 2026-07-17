@@ -97,7 +97,12 @@
 
   /* INGREDIENT ROWS */
   .ing-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-  .ing-row { display: grid; grid-template-columns: 72px 90px 1fr 70px 28px; gap: 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border: 1px solid transparent; transition: background 0.1s, border-color 0.1s; }
+  .ing-row { display: grid; grid-template-columns: 72px 90px 1fr 28px 70px 28px; gap: 6px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border: 1px solid transparent; transition: background 0.1s, border-color 0.1s; }
+  .pour-btn { height: 30px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-mid); border-radius: var(--radius); background: white; cursor: pointer; line-height: 1; user-select: none; transition: border-color 0.1s; }
+  .pour-btn:hover { border-color: var(--ink-mid); }
+  .pour-btn .pour-heavy { color: var(--accent); font-size: 12px; }
+  .pour-btn .pour-scant { color: var(--blue); font-size: 12px; }
+  .pour-btn .pour-none { color: var(--ink-ghost); font-size: 8px; letter-spacing: -1px; }
   .ing-row:hover { background: var(--parchment); }
   .ing-row.selected { background: var(--blue-dim); border-color: rgba(26,74,122,0.2); }
   .ing-row.batched { background: var(--gold-dim); border-color: rgba(184,134,11,0.2); }
@@ -445,7 +450,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 1;
+const APP_BUILD = 2;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -748,6 +753,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const target = recipes.find(r => r.id === editTarget);
     if (target) { currentRecipeId = editTarget; renderSidebar(); renderBuilder(target); }
   }
+  maybeShowMigrationBanner();
 });
 
 // ─── CHANGE LOG (shared audit trail, stored in the app_data blob) ─────────────
@@ -800,11 +806,12 @@ function flattenIngredients(r) {
     });
     return map;
   }
+  const val = ing => ((ing.qty||'') + ' ' + (ing.unit||'') + (ing.pourStyle ? ' ['+ing.pourStyle+']' : '')).trim();
   (r.ingredients || []).forEach(ing => {
     if (ing.isBatchGroup) {
-      (ing.children || []).forEach(c => { const k = c.ingredientName || c.ingredientId; if (k) map[k] = ((c.qty||'') + ' ' + (c.unit||'')).trim(); });
+      (ing.children || []).forEach(c => { const k = c.ingredientName || c.ingredientId; if (k) map[k] = val(c); });
     } else {
-      const k = ing.ingredientName || ing.ingredientId; if (k) map[k] = ((ing.qty||'') + ' ' + (ing.unit||'')).trim();
+      const k = ing.ingredientName || ing.ingredientId; if (k) map[k] = val(ing);
     }
   });
   return map;
@@ -1222,6 +1229,7 @@ function renderSingleRow(ing, idx) {
       <input type="text" class="form-input" style="height:30px;font-size:12px;" placeholder="Search ingredients..." value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onblur="acBlur(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
       <div class="ac-dropdown" id="ac-drop-${idx}" style="display:none;"></div>
     </div>
+    <div class="pour-btn" onclick="cyclePourStyle(${idx})" title="${pourStyleTitle(ing.pourStyle)}">${pourStyleGlyph(ing.pourStyle)}</div>
     <div style="text-align:right;padding-right:4px;">${costHTML}</div>
     <div style="display:flex;gap:2px;">
       <div class="icon-btn" onclick="toggleRowSelect(${idx})" title="Select for batch grouping" style="font-size:12px;"><i class="ti ti-checkbox"></i></div>
@@ -1287,6 +1295,27 @@ function updateIngField(idx, field, val) {
   if (field === 'unit') refreshIngRows();
 }
 
+// Pour style is metadata on the row — the ingredient name/link stays clean, so
+// costing and inventory still see one "Lemon Juice." null = normal (no marker).
+function pourStyleGlyph(style) {
+  if (style === 'heavy') return '<span class="pour-heavy">▲</span>';
+  if (style === 'scant') return '<span class="pour-scant">▼</span>';
+  return '<span class="pour-none">▲▼</span>';
+}
+function pourStyleTitle(style) {
+  if (style === 'heavy') return 'Heavy pour — click for scant';
+  if (style === 'scant') return 'Scant pour — click for normal';
+  return 'Normal pour — click for heavy';
+}
+function cyclePourStyle(idx) {
+  const r = currentRecipe();
+  if (!r || !r.ingredients[idx]) return;
+  const cur = r.ingredients[idx].pourStyle || null;
+  r.ingredients[idx].pourStyle = cur === null ? 'heavy' : cur === 'heavy' ? 'scant' : null;
+  saveRecipes();
+  refreshIngRows();
+}
+
 function updateBatchChild(groupIdx, childIdx, field, val) {
   const r = currentRecipe();
   if (!r) return;
@@ -1306,6 +1335,168 @@ function refreshIngRows() {
   if (!r) return;
   document.getElementById('ing-rows').innerHTML = renderIngredientRows(r);
   renderBatchOutput();
+}
+
+// ─── POUR-STYLE MIGRATION ─────────────────────────────────────────────────────
+// Historically a heavy/scant pour was typed into the ingredient NAME ("HEAVY
+// Lemon Juice"), which forks it from the real library item so it prices as
+// unlinked/$0. This moves the modifier to `pourStyle`, cleans the name, and
+// relinks to the base ingredient. Only UPPERCASE HEAVY/SCANT count as modifiers,
+// so real names like "Heavy Cream" are never touched. It's reviewed + one-click
+// (not silent-on-startup) because it can merge/delete library records.
+const POUR_MOD_RE = /\b(HEAVY|SCANT)\b/;         // case-sensitive: uppercase only
+function pourDetectMod(name){ const m = (name||'').match(POUR_MOD_RE); return m ? m[1].toLowerCase() : null; }
+function pourStripMod(name){ return (name||'').replace(/\b(HEAVY|SCANT)\b/g,'').replace(/\s+/g,' ').trim(); }
+function pourBaseIndex(data){
+  const idx = new Map();  // normalized clean name -> master id (non-modifier masters only)
+  const add = (name, id) => { if(!name || POUR_MOD_RE.test(name)) return; const k = name.trim().toLowerCase(); if(k && !idx.has(k)) idx.set(k, id); };
+  (data.spirits||[]).forEach(s => { add(s.name, s.id); if (s.brand && s.name) add(s.brand+' '+s.name, s.id); });
+  (data.otherIngredients||[]).forEach(o => add(o.name, o.id));
+  (data.recipes||[]).filter(r=>r.recipeType==='barprep').forEach(r => add(r.name, r.id));
+  return idx;
+}
+// Pure: compute what migration would change, no mutation.
+function detectPourMigration(data){
+  const base = pourBaseIndex(data);
+  const masterActions = new Map(); const masterMerges = [], masterRenames = [];
+  const considerMaster = (m, kind) => {
+    const pour = pourDetectMod(m.name); if(!pour) return;
+    const clean = pourStripMod(m.name);
+    const baseId = base.get(clean.toLowerCase());
+    if (baseId && baseId !== m.id && kind !== 'barprep') {
+      masterActions.set(m.id, {kind:'merge', targetId:baseId, pour});
+      masterMerges.push({dupId:m.id, dupName:m.name, baseName:clean, pour});
+    } else {
+      masterActions.set(m.id, {kind:'rename', targetId:m.id, pour, newName:clean});
+      masterRenames.push({id:m.id, oldName:m.name, newName:clean, pour});
+    }
+  };
+  (data.spirits||[]).forEach(m=>considerMaster(m,'spirit'));
+  (data.otherIngredients||[]).forEach(m=>considerMaster(m,'other'));
+  (data.recipes||[]).filter(r=>r.recipeType==='barprep').forEach(m=>considerMaster(m,'barprep'));
+
+  const rowEdits = [];
+  const planRow = (recipe, row, path) => {
+    let pour = row.pourStyle || null;
+    let newName = row.ingredientName || '';
+    let relinkTo; // undefined = no relink
+    if (row.ingredientId && masterActions.has(row.ingredientId)) {
+      const a = masterActions.get(row.ingredientId);
+      pour = pour || a.pour;
+      if (a.kind === 'merge') relinkTo = a.targetId;
+    }
+    const nameMod = pourDetectMod(newName);
+    if (nameMod) { pour = pour || nameMod; newName = pourStripMod(newName); }
+    if (row.ingredientId == null && newName) { const b = base.get(newName.toLowerCase()); if (b) relinkTo = b; }
+    const nameChanged = newName !== (row.ingredientName||'');
+    const pourChanged = (pour||null) !== (row.pourStyle||null);
+    const linkChanged = relinkTo !== undefined && relinkTo !== row.ingredientId;
+    if (nameChanged || pourChanged || linkChanged)
+      rowEdits.push({ recipeId:recipe.id, recipeName:recipe.name||'(untitled)', path, oldName:row.ingredientName||'', newName, pour, relinkTo, linkChanged });
+  };
+  (data.recipes||[]).forEach(recipe=>{
+    (recipe.ingredients||[]).forEach((row,i)=>{
+      if (row.isBatchGroup) (row.children||[]).forEach((c,ci)=>planRow(recipe,c,{i,ci}));
+      else planRow(recipe,row,{i});
+    });
+  });
+  return { rowEdits, masterMerges, masterRenames, counts:{ rows:rowEdits.length, merges:masterMerges.length, renames:masterRenames.length } };
+}
+// Mutating: recompute on the given (fresh) data and apply. Returns counts.
+function applyPourPlan(data){
+  const plan = detectPourMigration(data);
+  const byRecipe = new Map((data.recipes||[]).map(r=>[r.id,r]));
+  plan.rowEdits.forEach(e=>{
+    const r = byRecipe.get(e.recipeId); if(!r) return;
+    const row = e.path.ci != null ? (r.ingredients?.[e.path.i]?.children?.[e.path.ci]) : (r.ingredients?.[e.path.i]);
+    if (!row) return;
+    row.ingredientName = e.newName;
+    if (e.pour) row.pourStyle = e.pour;
+    if (e.linkChanged) row.ingredientId = e.relinkTo;
+  });
+  plan.masterRenames.forEach(m=>{
+    const s=(data.spirits||[]).find(x=>x.id===m.id); if(s){ s.name=m.newName; return; }
+    const o=(data.otherIngredients||[]).find(x=>x.id===m.id); if(o){ o.name=m.newName; return; }
+    const bp=(data.recipes||[]).find(x=>x.id===m.id); if(bp){ bp.name=m.newName; }
+  });
+  const dupIds = new Set(plan.masterMerges.map(m=>m.dupId));
+  if (dupIds.size){
+    data.spirits = (data.spirits||[]).filter(s=>!dupIds.has(s.id));
+    data.otherIngredients = (data.otherIngredients||[]).filter(o=>!dupIds.has(o.id));
+  }
+  return plan.counts;
+}
+
+function maybeShowMigrationBanner(){
+  const plan = detectPourMigration({ recipes, spirits, otherIngredients });
+  const total = plan.counts.rows + plan.counts.merges + plan.counts.renames;
+  const existing = document.getElementById('pour-migrate-banner');
+  if (total === 0) { if (existing) existing.remove(); return; }
+  if (existing) return;
+  const el = document.createElement('div');
+  el.id = 'pour-migrate-banner';
+  el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--gold);color:#1a1812;font-family:var(--mono);font-size:12px;padding:8px 16px;text-align:center;z-index:9998;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
+  el.innerHTML = `⚑ ${plan.counts.rows} ingredient row(s)` + (plan.counts.merges?` and ${plan.counts.merges} duplicate record(s)`:'') + ` still store HEAVY/SCANT in the name. `
+    + `<button onclick="openMigrationModal()" style="margin-left:8px;background:#1a1812;color:#f5f2ec;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Review &amp; migrate</button>`;
+  document.body.appendChild(el);
+}
+function openMigrationModal(){
+  const plan = detectPourMigration({ recipes, spirits, otherIngredients });
+  const rowLines = plan.rowEdits.slice(0,60).map(e=>{
+    const relink = e.linkChanged && e.relinkTo ? ' → link to library' : (e.linkChanged ? ' → unlink' : '');
+    return `<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="color:var(--ink-light);">${esc(e.recipeName)}:</span> "${esc(e.oldName)}" → "${esc(e.newName)}" <span style="color:var(--accent);font-family:var(--mono);">[${e.pour||'—'}]</span>${relink}</div>`;
+  }).join('');
+  const mergeLines = plan.masterMerges.map(m=>`<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">Merge record "${esc(m.dupName)}" → "${esc(m.baseName)}" (delete duplicate, re-point uses)</div>`).join('');
+  const renameLines = plan.masterRenames.map(m=>`<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">Rename record "${esc(m.oldName)}" → "${esc(m.newName)}"</div>`).join('');
+  const overflow = plan.rowEdits.length > 60 ? `<div style="font-size:11px;color:var(--ink-light);padding-top:6px;">…and ${plan.rowEdits.length-60} more rows</div>` : '';
+  let modal = document.getElementById('pour-migrate-modal');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'pour-migrate-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(26,24,18,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:2rem;';
+  modal.innerHTML = `<div style="background:white;border-radius:10px;max-width:620px;width:100%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);"><div style="font-family:var(--mono);font-size:14px;font-weight:500;">Migrate HEAVY / SCANT pours</div>
+      <div style="font-size:12px;color:var(--ink-light);margin-top:4px;">Moves the modifier out of the name into a pour-style tag, cleans the name, relinks to the priced library item, and consolidates duplicate records. Runs safely more than once.</div></div>
+    <div style="padding:12px 20px;overflow-y:auto;">${mergeLines}${renameLines}${rowLines||'<div style="font-size:12px;color:var(--ink-light);">No ingredient rows need changes.</div>'}${overflow}</div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="document.getElementById('pour-migrate-modal').remove()" class="btn">Cancel</button>
+      <button onclick="runPourMigration()" class="btn btn-primary">Run migration (${plan.counts.rows + plan.counts.merges + plan.counts.renames} changes)</button>
+    </div></div>`;
+  document.body.appendChild(modal);
+}
+async function runPourMigration(){
+  const btn = document.querySelector('#pour-migrate-modal .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Migrating…'; }
+  // True no-op if there's nothing to do — no write, no log entry.
+  const pre = detectPourMigration({ recipes, spirits, otherIngredients });
+  if (pre.counts.rows + pre.counts.merges + pre.counts.renames === 0) {
+    const modal = document.getElementById('pour-migrate-modal'); if (modal) modal.remove();
+    const banner = document.getElementById('pour-migrate-banner'); if (banner) banner.remove();
+    showToast('Nothing to migrate — already clean');
+    return;
+  }
+  try {
+    let counts = {rows:0,merges:0,renames:0};
+    await commitSave((data)=>{
+      counts = applyPourPlan(data);
+      const entry = makeLogEntry({ collection:'migration', itemId:null, item:'Pour-style cleanup', field:'(migration)', from:null,
+        to:`${counts.rows} rows, ${counts.merges} merged, ${counts.renames} renamed`, action:'migrate' });
+      appendChangeLog(data, [entry]);
+      return { onSuccess: ()=>{
+        recipes = data.recipes || []; spirits = data.spirits || []; otherIngredients = data.otherIngredients || [];
+        snapshotRecipes();
+        const modal = document.getElementById('pour-migrate-modal'); if (modal) modal.remove();
+        const banner = document.getElementById('pour-migrate-banner'); if (banner) banner.remove();
+        renderSidebar();
+        const cur = currentRecipe(); if (cur) renderBuilder(cur);
+        maybeShowMigrationBanner();
+        showToast(`✓ Migrated ${counts.rows} row(s), merged ${counts.merges}, renamed ${counts.renames}`);
+      }};
+    });
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Run migration'; }
+    // save error banner already surfaced by commitSave
+  }
 }
 
 // ─── AUTOCOMPLETE ─────────────────────────────────────────────────────────────
