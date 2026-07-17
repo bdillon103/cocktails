@@ -450,7 +450,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 2;
+const APP_BUILD = 3;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -754,7 +754,32 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (target) { currentRecipeId = editTarget; renderSidebar(); renderBuilder(target); }
   }
   maybeShowMigrationBanner();
+  initSaveFlush();
 });
+
+// Make sure the debounced save lands before the page goes away — otherwise
+// clicking to another page (Spec Sheet, Menu Grid) mid-type would leave the
+// last keystrokes unsaved.
+function initSaveFlush() {
+  // Intercept in-app navigation: flush first, then follow the link.
+  document.querySelectorAll('a.nav-link[href]').forEach(a => {
+    a.addEventListener('click', async (e) => {
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+      if (!_saveTimer && !_savePending && !_saveDrain) return; // nothing pending
+      e.preventDefault();
+      await flushSaves();
+      if (document.getElementById('save-error-banner') &&
+          !confirm('Your last change hasn’t saved yet. Leave this page anyway?')) return;
+      window.location.href = href;
+    });
+  });
+  // Flush when the tab is hidden (switching tabs/apps) and as a last resort on unload.
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushSaves(); });
+  window.addEventListener('beforeunload', (e) => {
+    if (_saveTimer || _savePending || _saveDrain) { flushSaves(); e.preventDefault(); e.returnValue = ''; }
+  });
+}
 
 // ─── CHANGE LOG (shared audit trail, stored in the app_data blob) ─────────────
 const CHANGELOG_CAP = 500;
@@ -847,7 +872,42 @@ function recipeIsDirty(r) {
   return snap === undefined || snap !== JSON.stringify(r);
 }
 
-async function saveRecipes() {
+// Saves used to fire on every keystroke — 32 call sites, each an independent
+// async read-modify-write. Rapid typing launched several overlapping saves that
+// finished out of order, so an earlier keystroke's value ("Watermel") could land
+// on the server AFTER the final one, and navigating away killed the last
+// in-flight save. Now every saveRecipes() just marks the recipes dirty and
+// schedules a single debounced save; saves never overlap (single-flight), and we
+// flush before navigating away so the latest value is always the one persisted.
+let _saveTimer = null;
+let _saveDrain = null;
+let _savePending = false;
+const SAVE_DEBOUNCE_MS = 450;
+function saveRecipes() {          // debounced entry point (keeps all 32 callers working)
+  _savePending = true;
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => { startSaveDrain(); }, SAVE_DEBOUNCE_MS);
+}
+function startSaveDrain() {
+  clearTimeout(_saveTimer); _saveTimer = null;
+  if (!_saveDrain) {
+    _saveDrain = (async () => {
+      try {
+        // Loop so keystrokes that arrive mid-save are folded into the next pass —
+        // the last pass always reads the live recipe object (latest value).
+        while (_savePending) { _savePending = false; await commitRecipes(); }
+      } finally { _saveDrain = null; }
+    })();
+  }
+  return _saveDrain;
+}
+// Force any pending/in-flight save to finish. Call before leaving the page.
+async function flushSaves() {
+  if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+  if (_savePending || _saveDrain) await startSaveDrain();
+}
+
+async function commitRecipes() {
   try {
     await commitSave((data) => {
       const freshRecipes = data.recipes || [];
@@ -2015,10 +2075,11 @@ function confirmAddFamily() {
 }
 
 // ─── SAVE / DUPLICATE / DELETE ────────────────────────────────────────────────
-function saveCurrentRecipe() {
+async function saveCurrentRecipe() {
   const r = currentRecipe();
   if (!r) return;
-  saveRecipes();
+  saveRecipes();          // mark dirty
+  await flushSaves();     // and actually wait for it to land before confirming
   renderSidebar();
   showToast(`✓ Saved: ${r.name || 'Untitled'}`);
 }
