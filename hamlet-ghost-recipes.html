@@ -336,7 +336,40 @@
 // ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgfrzhvgrilgxygoxjcn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Eq6r-RQzxU13f2A1sf3vHw_VoXb9tav';
-const LS_KEY = 'hg_app_data_v1';
+// ─── TENANT (multi-restaurant) ──────────────────────────────────────────────
+// Which restaurant's data this page loads is decided by the LOGGED-IN USER, not
+// the URL. Their Supabase user carries a `tenant` in app_metadata (assigned per
+// user in Supabase). No tenant set ⇒ 'main' = Hamlet & Ghost, so every existing
+// user is unchanged. One codebase, one deploy, one login page, every restaurant.
+const TENANTS = { main: 'Hamlet & Ghost', creature: 'Creature' };
+function resolveTenant() {
+  try {
+    const raw = localStorage.getItem('hg_session');
+    if (raw) {
+      const u = (JSON.parse(raw) || {}).user || {};
+      const t = (u.app_metadata && u.app_metadata.tenant) || (u.user_metadata && u.user_metadata.tenant);
+      if (t && Object.prototype.hasOwnProperty.call(TENANTS, String(t).toLowerCase())) return String(t).toLowerCase();
+    }
+  } catch (e) {}
+  return 'main';
+}
+const TENANT = resolveTenant();
+const ROW = TENANT;                          // Supabase app_data row id
+const LS_KEY = TENANT === 'main' ? 'hg_app_data_v1' : 'hg_app_data_v1_' + TENANT;  // main keeps its original cache key; others namespaced
+
+// Badge which restaurant is active so nobody edits the wrong company's data.
+if (TENANT !== 'main') {
+  window.addEventListener('DOMContentLoaded', function () {
+    var brand = document.querySelector('.nav-brand');
+    if (brand && !document.getElementById('tenant-badge')) {
+      var b = document.createElement('span');
+      b.id = 'tenant-badge';
+      b.textContent = (TENANTS[TENANT] || TENANT).toUpperCase();
+      b.style.cssText = 'margin-left:10px;padding:2px 8px;border-radius:20px;background:var(--accent,#c8392b);color:#fff;font-family:var(--mono,monospace);font-size:10px;letter-spacing:0.08em;font-weight:500;';
+      brand.insertAdjacentElement('afterend', b);
+    }
+  });
+}
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
 async function sbRequest(method, path, body) {
@@ -429,7 +462,7 @@ function requireAuth() {
 async function loadAppData() {
   // Try Supabase first
   try {
-    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.${ROW}&select=data`);
     if (rows && rows.length > 0 && rows[0].data) {
       const data = rows[0].data;
       // Update local cache
@@ -450,7 +483,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 3;
+const APP_BUILD = 4;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -482,7 +515,7 @@ function showStaleOverlay(latest) {
 // stale local cache and writing it back is exactly what reverts whatever landed
 // remotely in the meantime (and drops other people's change-log entries).
 async function loadForSave() {
-  const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+  const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.${ROW}&select=data`);
   if (!rows || !rows.length || !rows[0].data) throw new Error('empty server response');
   const data = rows[0].data;
   localStorage.setItem(LS_KEY, JSON.stringify(data));
@@ -506,7 +539,7 @@ async function patchRows(data, baseRev) {
     'Prefer': 'return=representation'
   };
   const cond = baseRev != null ? `&data->_meta->>rev=eq.${baseRev}` : '';
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_data?id=eq.main${cond}`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_data?id=eq.${ROW}${cond}`, {
     method: 'PATCH', headers, body: JSON.stringify({ data })
   });
   if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text().catch(()=>'')).slice(0, 140));
@@ -620,6 +653,7 @@ checkAppVersion();
 setInterval(checkAppVersion, 120000);
 
 function migrateFromOldKeys() {
+  if (TENANT !== 'main') return { spirits: [], otherIngredients: [], recipes: [], menus: [], importMeta: null, salesData: {} };
   // Migrate from old separate localStorage keys
   const spirits = localStorage.getItem('hg_spirits');
   const other = localStorage.getItem('hg_other');
@@ -716,8 +750,47 @@ const ICE_OPTIONS = ['Rocks','Big Cube','Collins Cube','Crushed','No Ice'];
 const FLAVOR_OPTIONS = ['Citrusy','Boozy','Bitter','Herbal','Sweet','Smoky','Savory','Tropical','Floral','Spicy'];
 const STYLE_OPTIONS = ['Stirred','Shaken','Built','Carbonated','Frozen'];
 const FAMILY_OPTIONS = ['Old Fashioned Family','Manhattan Family','Martini Family','Negroni Family','Classic Sour','Egg White / Foam Sour','Collins','Fizz','Highball','Aperitivo Style','Digestivo / Black Manhattan Style','Classic Tiki','Modern Tropical','Cream / Dessert Cocktails','Hot Cocktails','Savory / Culinary Cocktails','Carbonated Cocktails','Clarified Cocktails','Frozen Cocktails','Zero-Proof Cocktails'];
-const UNIT_OPTIONS = ['oz','ml','dash','barspoon','rinse','whole','tsp','tbsp','drops'];
+const UNIT_OPTIONS = ['oz','ml','qt','cup','tsp','tbsp','bottle','g','kg','lb','dash','barspoon','rinse','drops','whole'];
 const NEGLIGIBLE_UNITS = ['dash','barspoon','rinse'];
+
+// ─── UNITS ──────────────────────────────────────────────────────────────────
+// Real bar data is messy: "OZ", "Bottles", "Grams", "Quarts", trailing spaces.
+// Normalize case/plural/spelling to a canonical unit, then convert only genuine
+// VOLUMES to ounces. Weight (g/kg/lb) and counts (whole/bean) return null — they
+// are NEVER silently priced as ounces; those preps use the manual batch cost.
+const UNIT_ALIASES = {
+  oz:'oz', ounce:'oz', ounces:'oz',
+  ml:'ml', milliliter:'ml', milliliters:'ml',
+  tsp:'tsp', teaspoon:'tsp', teaspoons:'tsp',
+  tbsp:'tbsp', tablespoon:'tbsp', tablespoons:'tbsp',
+  cup:'cup', cups:'cup',
+  pt:'pt', pint:'pt', pints:'pt',
+  qt:'qt', quart:'qt', quarts:'qt',
+  gal:'gal', gallon:'gal', gallons:'gal',
+  bottle:'bottle', bottles:'bottle', btl:'bottle',
+  dash:'dash', dashes:'dash',
+  barspoon:'barspoon', barspoons:'barspoon', bsp:'barspoon',
+  rinse:'rinse', drop:'drop', drops:'drop',
+  whole:'whole', bean:'bean', beans:'bean', each:'each', piece:'each', pieces:'each', sprig:'each', sprigs:'each',
+  g:'g', gram:'g', grams:'g', gr:'g',
+  kg:'kg', kilogram:'kg', kilograms:'kg',
+  lb:'lb', lbs:'lb', pound:'lb', pounds:'lb'
+};
+function normUnit(u) {
+  const k = String(u || '').trim().toLowerCase();
+  if (UNIT_ALIASES[k]) return UNIT_ALIASES[k];
+  if (k.length > 1 && k.slice(-1) === 's' && UNIT_ALIASES[k.slice(0, -1)]) return UNIT_ALIASES[k.slice(0, -1)];
+  return k;
+}
+const VOL_TO_OZ = { oz:1, ml:1/29.5735, tsp:1/6, tbsp:0.5, cup:8, pt:16, qt:32, gal:128, bottle:750/29.5735 };
+function unitIsVolume(u) { return VOL_TO_OZ[normUnit(u)] != null; }
+// Ounces for a qty+unit, or null if it isn't a convertible volume (weight/count/unknown).
+function unitToOz(qty, unit) {
+  const f = VOL_TO_OZ[normUnit(unit)];
+  if (f == null) return null;
+  const q = parseFloat(qty);
+  return q > 0 ? q * f : null;
+}
 
 // ─── LOAD ─────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
@@ -1047,22 +1120,15 @@ function calcTotalCost(r) {
 }
 
 function getCostForRow(row) {
-  if (!row.ingredientId || NEGLIGIBLE_UNITS.includes(row.unit)) return null;
+  if (!row.ingredientId || NEGLIGIBLE_UNITS.includes(normUnit(row.unit))) return null;
   const ing = findIngredient(row.ingredientId);
   if (!ing) return null;
-  const qty = parseFloat(row.qty) || 0;
-  if (qty === 0) return null;
-  if (row.unit === 'oz') {
-    if (!ing.costPerOz || ing.costPerOz === 0) return null;
-    return qty * ing.costPerOz;
-  }
-  if (row.unit === 'ml') {
-    if (!ing.costPerOz || ing.costPerOz === 0) return null;
-    return (qty / 29.5735) * ing.costPerOz;
-  }
-  // Other units: treat as oz equivalent
   if (!ing.costPerOz || ing.costPerOz === 0) return null;
-  return qty * ing.costPerOz;
+  // Only genuine volumes are priced (via cost-per-oz). Weight/count/unknown
+  // units return null — never priced as if they were ounces.
+  const oz = unitToOz(row.qty, row.unit);
+  if (oz == null) return null;
+  return oz * ing.costPerOz;
 }
 
 function findIngredient(id) {
@@ -1565,7 +1631,7 @@ function acSearch(idx, query) {
   const drop = document.getElementById(`ac-drop-${idx}`);
   if (!drop) return;
   const q = query.toLowerCase().trim();
-  const bpItems = recipes.filter(r => r.recipeType === 'barprep' && r.costPerOz > 0).map(r => ({
+  const bpItems = recipes.filter(r => r.recipeType === 'barprep' && r.costPerOz > 0 && r.id !== currentRecipeId).map(r => ({
     id: r.id, brand: null, name: r.name, subcategory: 'Bar Prep', category: 'Bar Prep', costPerOz: r.costPerOz
   }));
   const all = [...spirits, ...otherIngredients, ...bpItems];
@@ -1601,6 +1667,7 @@ function acBlur(idx, val) {
     // Clear any stale ingredientId if name was manually cleared
     if (!trimmed) r.ingredients[idx].ingredientId = null;
     saveRecipes();
+    if (r.recipeType === 'barprep') { recomputeBPCost(r); refreshBPComp(); refreshBPYield(); return; }
     refreshCostCells();
   }, 150);
 }
@@ -1630,6 +1697,7 @@ function selectIngredient(idx, ingId, displayName) {
   const drop = document.getElementById(`ac-drop-${idx}`);
   if (input) input.value = displayName;
   if (drop) drop.style.display = 'none';
+  if (r.recipeType === 'barprep') { recomputeBPCost(r); refreshBPComp(); refreshBPYield(); return; }
   updateCosting();
   refreshCostCells();
 }
@@ -2139,7 +2207,235 @@ function showToast(msg) {
 }
 
 // ─── BAR PREP BUILDER ────────────────────────────────────────────────────────
+// ─── BAR PREP: COSTED COMPONENTS + AUTO YIELD ─────────────────────────────────
+// A prep recipe now uses the SAME `ingredients[]` rows, autocomplete, and
+// getCostForRow engine as cocktails. Cost rolls up from linked components and
+// costPerOz = batchCost / yieldOz flows into cocktails via findIngredient
+// unchanged. Yield defaults to the sum of the volume components; you only
+// override it for batches that actually lose volume (clarified / reduced / etc).
+function bpRowVolOz(row) {
+  const oz = unitToOz(row.qty, row.unit);
+  return oz == null ? 0 : oz;
+}
+function bpInputVolumeOz(r) {
+  return (r.ingredients || []).reduce((s, row) => s + bpRowVolOz(row), 0);
+}
+function bpBatchCost(r) {
+  let t = 0;
+  (r.ingredients || []).forEach(row => { const c = getCostForRow(row); if (c !== null) t += c; });
+  return t;
+}
+function bpYieldOz(r) {
+  if (r.yieldManual) { const y = parseFloat(r.yieldOz); return y > 0 ? y : 0; }
+  return bpInputVolumeOz(r);
+}
+// Writes r.costPerOz (component-derived when possible, else the manual flat
+// fallback) so the cocktail-side flow-through keeps reading r.costPerOz as before.
+function recomputeBPCost(r) {
+  // Persist the effective yield (auto = sum of parts) so downstream readers
+  // like the spec sheet can show yield / drinks-per-batch without recomputing.
+  if (!r.yieldManual) { const iv = bpInputVolumeOz(r); r.yieldOz = iv > 0 ? iv : null; }
+  const batch = bpBatchCost(r);
+  const y = bpYieldOz(r);
+  if (batch > 0 && y > 0) r.costPerOz = batch / y;
+  else if (r.flatBatchOz > 0 && r.flatCostDollars > 0) r.costPerOz = r.flatCostDollars / r.flatBatchOz;
+  // Otherwise LEAVE the existing cost alone. Never null out a real costPerOz
+  // just because nothing is linked yet — this function runs on every builder
+  // open, and nulling here would silently strip the cost from every cocktail
+  // that uses this prep. Clearing a cost stays an explicit user action.
+  return r.costPerOz;
+}
+// Legacy preps stored free-text bpIngredients. Lazily lift them into linked
+// rows (unlinked to start — click to link each). Non-destructive: bpIngredients
+// is left in place as a fallback / rollback safety net.
+// True only if these rows carry real content — a link, a typed name, or a
+// batch group. Blank placeholder rows do NOT count.
+function bpRowsHaveContent(rows) {
+  return Array.isArray(rows) && rows.some(row =>
+    row && (row.ingredientId || (row.ingredientName || '').trim() || row.isBatchGroup));
+}
+function migrateBPToIngredients(r) {
+  // NOTE: newRecipe() seeds every recipe with `ingredients: []`, and a stray
+  // "Add component" click leaves a BLANK row — so neither Array.isArray nor
+  // .length can tell "already migrated" from "still empty". Only actual
+  // content (a link or a typed name) counts, otherwise a prep whose real data
+  // is still in bpIngredients would render empty and look like data loss.
+  if (bpRowsHaveContent(r.ingredients)) return;
+  const src = r.bpIngredients || [];
+  if (!src.length) { if (!Array.isArray(r.ingredients)) r.ingredients = []; return; }
+  r.ingredients = src.map(ci => ({
+    id: crypto.randomUUID(),
+    qty: (ci.qty != null ? String(ci.qty) : ''),
+    unit: ci.unit || 'oz',
+    ingredientId: null,
+    ingredientName: ci.name || ''
+  }));
+}
+
+function renderBPCompRows(r) {
+  const ings = r.ingredients || [];
+  if (ings.length === 0) return '<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;padding:4px 2px;">No components yet — add ingredients to auto-cost this batch.</div>';
+  return ings.map((ing, idx) => {
+    const units = UNIT_OPTIONS.includes(ing.unit) ? UNIT_OPTIONS : [ing.unit, ...UNIT_OPTIONS];
+    return `<div class="ing-row" id="row-${idx}" data-idx="${idx}" style="display:grid;grid-template-columns:56px 82px 1fr 74px 28px;gap:6px;align-items:center;">
+      <input type="text" class="form-input" style="height:30px;font-size:12px;font-family:var(--mono);text-align:center;" value="${esc(ing.qty||'')}" placeholder="0" oninput="updateBPComp(${idx},'qty',this.value)">
+      <select class="form-select" style="height:30px;font-size:12px;" onchange="updateBPComp(${idx},'unit',this.value)">
+        ${units.map(u => `<option value="${esc(u)}" ${ing.unit===u?'selected':''}>${esc(u)}</option>`).join('')}
+      </select>
+      <div class="ac-wrap">
+        <input type="text" class="form-input" style="height:30px;font-size:12px;" placeholder="Search ingredients…" value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onblur="acBlur(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
+        <div class="ac-dropdown" id="ac-drop-${idx}" style="display:none;"></div>
+      </div>
+      <div id="bpcost-${idx}" style="text-align:right;padding-right:4px;">${bpCostCellHTML(ing)}</div>
+      <div class="icon-btn danger" onclick="removeBPComp(${idx})" style="font-size:12px;"><i class="ti ti-trash"></i></div>
+    </div>`;
+  }).join('');
+}
+// Rows whose unit isn't a volume and isn't negligible (weight/count/unknown).
+// These are intentionally NOT auto-costed — the prep uses the manual batch cost.
+function bpUncostedUnitRows(r) {
+  return (r.ingredients || []).filter(x =>
+    x && x.unit && !unitIsVolume(x.unit) && !NEGLIGIBLE_UNITS.includes(normUnit(x.unit))
+    && (x.ingredientId || (x.ingredientName || '').trim()));
+}
+function bpCostCellHTML(ing) {
+  const nu = normUnit(ing.unit);
+  if (NEGLIGIBLE_UNITS.includes(nu)) return `<span class="neg-pill">neg.</span>`;
+  // Weight/count/unknown unit → not auto-costed (manual batch cost covers it).
+  if (ing.unit && !unitIsVolume(ing.unit) && (ing.ingredientId || (ing.ingredientName||'').trim())) {
+    return `<span class="unlinked-pill" title="Measured in &quot;${esc(ing.unit)}&quot; — not auto-costed. Use the manual batch cost for this prep.">${esc(ing.unit)}</span>`;
+  }
+  const cost = getCostForRow(ing);
+  return cost !== null
+      ? `<span class="ing-cost-cell has-cost">$${cost.toFixed(3)}</span>`
+      : ing.ingredientId
+        ? `<span class="no-price-pill"><i class="ti ti-alert-triangle" style="font-size:10px;"></i> ?</span>`
+        : ing.ingredientName
+          ? `<span class="unlinked-pill">free</span>`
+          : `<span class="ing-cost-cell">—</span>`;
+}
+function renderBPYieldInner(r) {
+  const inputVol = bpInputVolumeOz(r);
+  const yieldOz = bpYieldOz(r);
+  const batch = bpBatchCost(r);
+  const manual = !!r.yieldManual;
+  const cpo = (batch > 0 && yieldOz > 0) ? batch / yieldOz : (r.costPerOz || null);
+  const loss = (manual && inputVol > 0 && yieldOz < inputVol) ? (inputVol - yieldOz) / inputVol : 0;
+  const fmt = n => Math.round(n * 10) / 10;
+  const yieldVal = yieldOz > 0 ? fmt(yieldOz) : '';
+  const drinks = (cpo && yieldOz > 0) ? Math.floor(yieldOz / 2) : 0;
+  const kUp = 'font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);opacity:.85;';
+  const kVal = 'font-family:var(--mono);font-size:15px;color:var(--gold);';
+  let html = `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-light);">Yield (oz)</span>
+      <input type="number" class="form-input" style="width:92px;height:32px;font-family:var(--mono);text-align:center;" value="${yieldVal}" placeholder="${inputVol>0?fmt(inputVol):'—'}" step="0.25" onchange="updateBPYield(this.value)">
+    </div>
+    ${ manual
+        ? `<span style="font-family:var(--mono);font-size:10px;color:var(--gold);">measured override</span>
+           <span onclick="resetBPYield()" style="cursor:pointer;font-size:11px;color:var(--blue);">↻ reset to sum of parts${inputVol>0?' ('+fmt(inputVol)+' oz)':''}</span>`
+        : `<span style="font-family:var(--mono);font-size:10px;color:var(--ink-light);">auto · sum of parts</span>` }
+  </div>`;
+  if (loss > 0.001) {
+    const keepPct = Math.max(0, Math.min(100, (yieldOz / inputVol) * 100));
+    html += `<div style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--ink-mid);margin-bottom:10px;">
+      <span style="color:var(--ink-light);">reconciliation</span>
+      <div style="flex:1;height:6px;background:var(--parchment-dark);border-radius:3px;overflow:hidden;position:relative;">
+        <span style="position:absolute;left:0;top:0;bottom:0;width:${keepPct}%;background:var(--green);border-radius:3px;"></span>
+      </div>
+      <span style="color:var(--accent);">−${Math.round(loss*100)}% lost · cost/oz adjusted up</span>
+    </div>`;
+  }
+  const bad = bpUncostedUnitRows(r);
+  if (bad.length) {
+    html += `<div style="background:var(--gold-dim);border:1px solid rgba(184,134,11,.3);border-radius:var(--radius);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--ink-mid);">
+      <b style="color:var(--gold);">${bad.length} component${bad.length>1?'s aren’t':' isn’t'} auto-costed</b> — ${bad.map(x=>esc((x.ingredientName||'?')+' ('+x.unit+')')).join(', ')} measured by weight/count.
+      Enter this batch's cost in the manual field below.</div>`;
+  }
+  html += `<div style="display:flex;gap:24px;flex-wrap:wrap;background:var(--gold-dim);border:1px solid rgba(184,134,11,.28);border-radius:var(--radius);padding:11px 15px;">
+    <div><div style="${kUp}">Batch cost</div><div style="${kVal}">${batch>0?'$'+batch.toFixed(2):'—'}</div></div>
+    <div><div style="${kUp}">Cost / oz</div><div style="${kVal}">${cpo?'$'+cpo.toFixed(3):'—'}</div></div>
+    <div><div style="${kUp}">≈ drinks (2 oz)</div><div style="${kVal}">${drinks||'—'}</div></div>
+  </div>`;
+  html += `<div style="margin-top:12px;">
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-light);margin-bottom:6px;">Manual batch cost — fallback${batch>0?' (overridden by components above)':''}</div>
+    <div class="form-grid-2">
+      <div class="form-group"><label class="form-label">Batch size (oz)</label>
+        <input type="number" class="form-input" placeholder="e.g. 32" value="${r.flatBatchOz||''}" oninput="updateBPManual('flatBatchOz',this.value)"></div>
+      <div class="form-group"><label class="form-label">Total batch cost ($)</label>
+        <input type="number" class="form-input" placeholder="e.g. 12.50" step="0.01" value="${r.flatCostDollars||''}" oninput="updateBPManual('flatCostDollars',this.value)"></div>
+    </div>
+  </div>`;
+  return html;
+}
+function refreshBPComp() {
+  const el = document.getElementById('bp-ing-rows');
+  if (el) el.innerHTML = renderBPCompRows(currentRecipe());
+}
+function refreshBPYield() {
+  const el = document.getElementById('bp-yield');
+  if (el) el.innerHTML = renderBPYieldInner(currentRecipe());
+}
+function updateBPComp(idx, field, val) {
+  const r = currentRecipe();
+  if (!r || !r.ingredients[idx]) return;
+  r.ingredients[idx][field] = val;
+  saveRecipes();
+  recomputeBPCost(r);
+  const cell = document.getElementById('bpcost-' + idx);
+  if (cell) cell.innerHTML = bpCostCellHTML(r.ingredients[idx]);
+  if (field === 'unit') refreshBPComp();
+  refreshBPYield();
+}
+function addBPComp() {
+  const r = currentRecipe();
+  if (!r) return;
+  if (!Array.isArray(r.ingredients)) r.ingredients = [];
+  r.ingredients.push({ id: crypto.randomUUID(), qty: '', unit: 'oz', ingredientId: null, ingredientName: '' });
+  saveRecipes();
+  refreshBPComp();
+  refreshBPYield();
+  const inputs = document.getElementById('bp-ing-rows').querySelectorAll('input[id^="ac-input-"]');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+function removeBPComp(idx) {
+  const r = currentRecipe();
+  if (!r || !r.ingredients) return;
+  r.ingredients.splice(idx, 1);
+  saveRecipes();
+  recomputeBPCost(r);
+  refreshBPComp();
+  refreshBPYield();
+}
+function updateBPYield(val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r.yieldManual = true;
+  r.yieldOz = parseFloat(val) || null;
+  saveRecipes();
+  recomputeBPCost(r);
+  refreshBPYield();
+}
+function resetBPYield() {
+  const r = currentRecipe();
+  if (!r) return;
+  r.yieldManual = false;
+  saveRecipes();
+  recomputeBPCost(r);
+  refreshBPYield();
+}
+function updateBPManual(field, val) {
+  const r = currentRecipe();
+  if (!r) return;
+  r[field] = parseFloat(val) || null;
+  saveRecipes();
+  recomputeBPCost(r);
+  refreshBPYield();
+}
+
 function renderBarPrepBuilder(r) {
+  migrateBPToIngredients(r);
+  recomputeBPCost(r);
   document.getElementById('builder-area').innerHTML = `
   <div class="builder">
 
@@ -2166,7 +2462,7 @@ function renderBarPrepBuilder(r) {
             value="${esc(r.name)}" oninput="updateField('name',this.value)">
         </div>
         <div class="form-group">
-          <label class="form-label">Yield</label>
+          <label class="form-label">Yield label — for the sheet</label>
           <input type="text" class="form-input" placeholder="e.g. 1 quart, 1 bottle, 1 cambro"
             value="${esc(r.bpYield||'')}" oninput="updateField('bpYield',this.value)">
         </div>
@@ -2178,14 +2474,14 @@ function renderBarPrepBuilder(r) {
       </label>
     </div>
 
-    <!-- INGREDIENTS -->
+    <!-- COMPONENTS -->
     <div class="card">
-      <div class="card-title">Ingredients</div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;"><span>Components</span><span style="font-family:var(--mono);font-size:10px;color:var(--ink-light);text-transform:none;letter-spacing:0;">link ingredients → live batch cost</span></div>
       <div id="bp-ing-rows" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">
-        ${renderBPIngRows(r)}
+        ${renderBPCompRows(r)}
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="addBPIngRow()">
-        <i class="ti ti-plus"></i> Add ingredient
+      <button class="btn btn-ghost btn-sm" onclick="addBPComp()">
+        <i class="ti ti-plus"></i> Add component
       </button>
     </div>
 
@@ -2208,29 +2504,10 @@ function renderBarPrepBuilder(r) {
         oninput="updateField('summary',this.value)">${esc(r.summary||'')}</textarea>
     </div>
 
-    <!-- PRICING -->
+    <!-- YIELD & COST -->
     <div class="card">
-      <div class="card-title">Pricing</div>
-      <div style="font-size:12px;color:var(--ink-light);margin-bottom:12px;">Set a cost per oz to enable COGS flow-through when this item is used in cocktail recipes.</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-        <button id="bp-size-16" class="btn btn-sm ${r.flatBatchOz===16?'btn-primary':''}" onclick="setBPBatchSize(16)">16 oz (1 pt)</button>
-        <button id="bp-size-32" class="btn btn-sm ${r.flatBatchOz===32?'btn-primary':''}" onclick="setBPBatchSize(32)">32 oz (1 qt)</button>
-        <button id="bp-size-64" class="btn btn-sm ${r.flatBatchOz===64?'btn-primary':''}" onclick="setBPBatchSize(64)">64 oz (2 qt)</button>
-        <button id="bp-size-128" class="btn btn-sm ${r.flatBatchOz===128?'btn-primary':''}" onclick="setBPBatchSize(128)">128 oz (1 gal)</button>
-      </div>
-      <div class="form-grid-2" style="margin-bottom:10px;">
-        <div class="form-group">
-          <label class="form-label">Batch size (oz)</label>
-          <input type="number" class="form-input" id="bp-batch-oz" placeholder="e.g. 32" value="${r.flatBatchOz||''}" oninput="updateField('flatBatchOz',parseFloat(this.value)||null);updateBPCost()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Total batch cost ($)</label>
-          <input type="number" class="form-input" id="bp-flat-cost" placeholder="e.g. 12.50" step="0.01" value="${r.flatCostDollars||''}" oninput="updateField('flatCostDollars',parseFloat(this.value)||null);updateBPCost()">
-        </div>
-      </div>
-      <div id="bp-cost-display">
-        ${r.costPerOz ? `<div style="background:var(--green-dim);color:var(--green);padding:8px 12px;border-radius:var(--radius);font-family:var(--mono);font-size:12px;font-weight:500;"><i class="ti ti-check" style="font-size:12px;"></i> $${r.costPerOz.toFixed(3)}/oz — will appear in cocktail autocomplete</div>` : '<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;">Enter batch size and total cost to calculate cost per oz.</div>'}
-      </div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;"><span>Yield &amp; cost</span><span style="font-family:var(--mono);font-size:10px;color:var(--ink-light);text-transform:none;letter-spacing:0;">cost/oz flows into cocktail autocomplete</span></div>
+      <div id="bp-yield">${renderBPYieldInner(r)}</div>
     </div>
 
     <!-- SAVE BAR -->
@@ -2358,6 +2635,7 @@ function updateBPStep(i, val) {
 
 
 function seedBarPrepRecipes() {
+  if (TENANT !== 'main') return;
   const existing = localStorage.getItem('hg_recipes');
   const existingRecipes = existing ? JSON.parse(existing) : [];
   // Only seed if no bar prep recipes exist yet
@@ -2973,6 +3251,7 @@ function seedBarPrepRecipes() {
 
 
 function seedCocktailRecipes() {
+  if (TENANT !== 'main') return;
   const existing = localStorage.getItem('hg_recipes');
   const existingRecipes = existing ? JSON.parse(existing) : [];
   if (existingRecipes.some(r => r.recipeType !== 'barprep' && r.source === 'seed')) return;

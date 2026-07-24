@@ -406,7 +406,40 @@
 // ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgfrzhvgrilgxygoxjcn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Eq6r-RQzxU13f2A1sf3vHw_VoXb9tav';
-const LS_KEY = 'hg_app_data_v1';
+// ─── TENANT (multi-restaurant) ──────────────────────────────────────────────
+// Which restaurant's data this page loads is decided by the LOGGED-IN USER, not
+// the URL. Their Supabase user carries a `tenant` in app_metadata (assigned per
+// user in Supabase). No tenant set ⇒ 'main' = Hamlet & Ghost, so every existing
+// user is unchanged. One codebase, one deploy, one login page, every restaurant.
+const TENANTS = { main: 'Hamlet & Ghost', creature: 'Creature' };
+function resolveTenant() {
+  try {
+    const raw = localStorage.getItem('hg_session');
+    if (raw) {
+      const u = (JSON.parse(raw) || {}).user || {};
+      const t = (u.app_metadata && u.app_metadata.tenant) || (u.user_metadata && u.user_metadata.tenant);
+      if (t && Object.prototype.hasOwnProperty.call(TENANTS, String(t).toLowerCase())) return String(t).toLowerCase();
+    }
+  } catch (e) {}
+  return 'main';
+}
+const TENANT = resolveTenant();
+const ROW = TENANT;                          // Supabase app_data row id
+const LS_KEY = TENANT === 'main' ? 'hg_app_data_v1' : 'hg_app_data_v1_' + TENANT;  // main keeps its original cache key; others namespaced
+
+// Badge which restaurant is active so nobody edits the wrong company's data.
+if (TENANT !== 'main') {
+  window.addEventListener('DOMContentLoaded', function () {
+    var brand = document.querySelector('.nav-brand');
+    if (brand && !document.getElementById('tenant-badge')) {
+      var b = document.createElement('span');
+      b.id = 'tenant-badge';
+      b.textContent = (TENANTS[TENANT] || TENANT).toUpperCase();
+      b.style.cssText = 'margin-left:10px;padding:2px 8px;border-radius:20px;background:var(--accent,#c8392b);color:#fff;font-family:var(--mono,monospace);font-size:10px;letter-spacing:0.08em;font-weight:500;';
+      brand.insertAdjacentElement('afterend', b);
+    }
+  });
+}
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
 async function sbRequest(method, path, body) {
@@ -499,7 +532,7 @@ function requireAuth() {
 async function loadAppData() {
   // Try Supabase first
   try {
-    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.${ROW}&select=data`);
     if (rows && rows.length > 0 && rows[0].data) {
       const data = rows[0].data;
       // Update local cache
@@ -523,7 +556,7 @@ function currentUserEmail() {
 }
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 3;
+const APP_BUILD = 4;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -547,7 +580,7 @@ function showStaleOverlay(latest) {
 // Authoritative read for saves — NO cache fallback. If we can't read the true
 // server state we abort rather than write our change on top of stale data.
 async function loadForSave() {
-  const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+  const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.${ROW}&select=data`);
   if (!rows || !rows.length || !rows[0].data) throw new Error('empty server response');
   const data = rows[0].data;
   localStorage.setItem(LS_KEY, JSON.stringify(data));
@@ -563,7 +596,7 @@ async function patchRows(data, baseRev) {
   const headers = { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json',
     'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`, 'Prefer': 'return=representation' };
   const cond = baseRev != null ? `&data->_meta->>rev=eq.${baseRev}` : '';
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_data?id=eq.main${cond}`, { method: 'PATCH', headers, body: JSON.stringify({ data }) });
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_data?id=eq.${ROW}${cond}`, { method: 'PATCH', headers, body: JSON.stringify({ data }) });
   if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text().catch(()=>'')).slice(0, 140));
   return res.json().catch(() => null);
 }
@@ -647,6 +680,7 @@ checkAppVersion();
 setInterval(checkAppVersion, 120000);
 
 function migrateFromOldKeys() {
+  if (TENANT !== 'main') return { spirits: [], otherIngredients: [], recipes: [], menus: [], importMeta: null, salesData: {} };
   // Migrate from old separate localStorage keys
   const spirits = localStorage.getItem('hg_spirits');
   const other = localStorage.getItem('hg_other');
@@ -952,10 +986,24 @@ function renderRecipeBlock(r, showMethod, showGarnish) {
   </div>`;
 }
 
+// Prep components: prefer the linked `ingredients` rows (new model), fall back
+// to legacy free-text bpIngredients for preps not yet re-saved in the builder.
+function prepRows(r) {
+  if (Array.isArray(r.ingredients) && r.ingredients.length && r.recipeType === 'barprep')
+    return r.ingredients.map(function(i){ return { qty: i.qty, unit: i.unit, name: i.ingredientName || '' }; });
+  return (r.bpIngredients || []).map(function(i){ return { qty: i.qty, unit: i.unit, name: i.name || '' }; });
+}
+function prepYieldText(r) {
+  var parts = [];
+  if (r.bpYield) parts.push(r.bpYield);
+  if (r.yieldOz > 0) parts.push('≈' + Math.floor(r.yieldOz / 2) + ' drinks');
+  return parts.join(' · ');
+}
 function renderPrepBlock(r) {
-  const ings = r.bpIngredients || [];
+  const ings = prepRows(r);
   const steps = r.bpSteps || [];
-  const yieldSpan = r.bpYield ? '<span style="font-weight:400;color:#8a8680;font-size:10px;margin-left:8px;">' + esc(r.bpYield) + '</span>' : '';
+  const yt = prepYieldText(r);
+  const yieldSpan = yt ? '<span style="font-weight:400;color:#8a8680;font-size:10px;margin-left:8px;">' + esc(yt) + '</span>' : '';
   const stepsHtml = steps.length > 0
     ? '<ol style="margin-top:4px;padding-left:14px;">'
       + steps.map(s => '<li class="recipe-method" style="line-height:1.6;margin-bottom:0;">' + esc(s) + '</li>').join('')
@@ -1019,13 +1067,15 @@ function buildSpecMarkdown() {
     if (barPrepRecipes.length > 0 || houseStaples.length > 0) {
       lines.push('# **Bar Prep**', '');
       barPrepRecipes.forEach(r => {
-        lines.push(`**${r.name || 'Untitled'}**${r.bpYield ? ` — ${r.bpYield}` : ''}`, '');
-        (r.bpIngredients || []).forEach(ing => {
+        const yt = prepYieldText(r);
+        lines.push(`**${r.name || 'Untitled'}**${yt ? ` — ${yt}` : ''}`, '');
+        const prows = prepRows(r);
+        prows.forEach(ing => {
           const qty = [ing.qty, ing.unit].filter(Boolean).join(' ');
           const line = [qty, ing.name || ''].filter(Boolean).join(' ').trim();
           if (line) lines.push(`- ${line}`);
         });
-        if ((r.bpIngredients || []).length) lines.push('');
+        if (prows.length) lines.push('');
         (r.bpSteps || []).forEach((s, i) => lines.push(`${i + 1}. ${s}`));
         if ((r.bpSteps || []).length) lines.push('');
         if (r.summary) lines.push(`*${r.summary}*`, '');

@@ -175,7 +175,40 @@ tr:hover td{background:var(--parchment) !important;cursor:pointer;}
 // ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgfrzhvgrilgxygoxjcn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Eq6r-RQzxU13f2A1sf3vHw_VoXb9tav';
-const LS_KEY = 'hg_app_data_v1';
+// ─── TENANT (multi-restaurant) ──────────────────────────────────────────────
+// Which restaurant's data this page loads is decided by the LOGGED-IN USER, not
+// the URL. Their Supabase user carries a `tenant` in app_metadata (assigned per
+// user in Supabase). No tenant set ⇒ 'main' = Hamlet & Ghost, so every existing
+// user is unchanged. One codebase, one deploy, one login page, every restaurant.
+const TENANTS = { main: 'Hamlet & Ghost', creature: 'Creature' };
+function resolveTenant() {
+  try {
+    const raw = localStorage.getItem('hg_session');
+    if (raw) {
+      const u = (JSON.parse(raw) || {}).user || {};
+      const t = (u.app_metadata && u.app_metadata.tenant) || (u.user_metadata && u.user_metadata.tenant);
+      if (t && Object.prototype.hasOwnProperty.call(TENANTS, String(t).toLowerCase())) return String(t).toLowerCase();
+    }
+  } catch (e) {}
+  return 'main';
+}
+const TENANT = resolveTenant();
+const ROW = TENANT;                          // Supabase app_data row id
+const LS_KEY = TENANT === 'main' ? 'hg_app_data_v1' : 'hg_app_data_v1_' + TENANT;  // main keeps its original cache key; others namespaced
+
+// Badge which restaurant is active so nobody edits the wrong company's data.
+if (TENANT !== 'main') {
+  window.addEventListener('DOMContentLoaded', function () {
+    var brand = document.querySelector('.nav-brand');
+    if (brand && !document.getElementById('tenant-badge')) {
+      var b = document.createElement('span');
+      b.id = 'tenant-badge';
+      b.textContent = (TENANTS[TENANT] || TENANT).toUpperCase();
+      b.style.cssText = 'margin-left:10px;padding:2px 8px;border-radius:20px;background:var(--accent,#c8392b);color:#fff;font-family:var(--mono,monospace);font-size:10px;letter-spacing:0.08em;font-weight:500;';
+      brand.insertAdjacentElement('afterend', b);
+    }
+  });
+}
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
 async function sbRequest(method, path, body) {
@@ -268,7 +301,7 @@ function requireAuth() {
 async function loadAppData() {
   // Try Supabase first
   try {
-    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.main&select=data`);
+    const rows = await sbRequest('GET', `/rest/v1/app_data?id=eq.${ROW}&select=data`);
     if (rows && rows.length > 0 && rows[0].data) {
       const data = rows[0].data;
       // Update local cache
@@ -288,7 +321,7 @@ async function loadAppData() {
 // NB: the Menu Grid is read-only — it never writes the blob — but it keeps the
 // same hardened data layer as the other pages for consistency.
 const PAGE_ID = 'grid';
-const APP_BUILD = 3;
+const APP_BUILD = 4;
 let appIsStale = false;
 function currentUserEmail() {
   try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
@@ -318,7 +351,7 @@ function showStaleOverlay(latest) {
 
 async function saveAppData(data) {
   data._meta = { rev: ((data._meta && data._meta.rev) || 0) + 1, at: Date.now(), by: currentUserEmail(), from: PAGE_ID, build: APP_BUILD };
-  await sbRequest('PATCH', `/rest/v1/app_data?id=eq.main`, { data });
+  await sbRequest('PATCH', `/rest/v1/app_data?id=eq.${ROW}`, { data });
   localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
 
@@ -326,6 +359,7 @@ checkAppVersion();
 setInterval(checkAppVersion, 120000);
 
 function migrateFromOldKeys() {
+  if (TENANT !== 'main') return { spirits: [], otherIngredients: [], recipes: [], menus: [], importMeta: null, salesData: {} };
   // Migrate from old separate localStorage keys
   const spirits = localStorage.getItem('hg_spirits');
   const other = localStorage.getItem('hg_other');
