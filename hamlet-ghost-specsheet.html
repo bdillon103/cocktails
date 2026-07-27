@@ -556,7 +556,7 @@ function currentUserEmail() {
 }
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 5;
+const APP_BUILD = 6;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -965,6 +965,16 @@ function renderSpecSheet(forPrint = false) {
   return html;
 }
 
+// Printed name for a cocktail ingredient: prefer the linked library item's
+// short "spec sheet name" (e.g. "ALB Vodka" for "Albany Distilling Co. — ALB
+// Vodka"); fall back to the name stored on the recipe row.
+function specDisplayName(ing) {
+  if (ing.ingredientId) {
+    const lib = spirits.find(s => s.id === ing.ingredientId) || otherIngredients.find(o => o.id === ing.ingredientId);
+    if (lib && lib.specSheetName && lib.specSheetName.trim()) return lib.specSheetName.trim();
+  }
+  return ing.ingredientName || '';
+}
 function renderRecipeBlock(r, showMethod, showGarnish) {
   const batchGroups = (r.ingredients || []).filter(i => i.isBatchGroup);
   return `<div class="recipe-block">
@@ -978,7 +988,7 @@ function renderRecipeBlock(r, showMethod, showGarnish) {
         const pour = ing.pourStyle === 'heavy' ? ' <span style="color:#c8392b;font-size:0.85em;">▲ heavy</span>' : ing.pourStyle === 'scant' ? ' <span style="color:#26608a;font-size:0.85em;">▼ scant</span>' : '';
         const isPrep = ing.ingredientId && allRecipes.some(p => p.id === ing.ingredientId && p.recipeType === 'barprep');
         const prepMark = isPrep ? ' <span style="color:#9c7208;" title="House bar prep — full recipe on the Bar Prep page">▸</span>' : '';
-        return `<li><span class="ing-qty-label">${esc(qty)}</span><span>${esc(ing.ingredientName || '')}${prepMark}${pour}</span></li>`;
+        return `<li><span class="ing-qty-label">${esc(qty)}</span><span>${esc(specDisplayName(ing))}${prepMark}${pour}</span></li>`;
       }).join('')}
     </ul>
     ${showMethod && (r.style || r.glass || r.ice) ? `<div class="recipe-method">${[r.style, r.glass, r.ice].filter(Boolean).join(', ')}</div>` : ''}

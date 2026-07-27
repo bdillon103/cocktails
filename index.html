@@ -744,6 +744,10 @@
             <input type="text" class="form-input" id="f-name" placeholder="e.g. Tom Cat Gin">
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Spec sheet name <span style="color:var(--ink-light);font-weight:400;font-size:11px;">— optional short name shown on the printed sheet</span></label>
+          <input type="text" class="form-input" id="f-specsheet" placeholder="defaults to the name above">
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Subcategory</label>
@@ -1016,7 +1020,7 @@ async function loadAppData() {
 const PAGE_ID = 'ingredients';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 5;
+const APP_BUILD = 6;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -1324,7 +1328,7 @@ async function save(opts) {
   try {
     await commitSave((data) => {
       const logEntries = opts.suppressItemLog ? null : [];
-      const mergedSpirits = mergeById(data.spirits || [], spirits, spiritSnapshots, deletedSpiritIds, 'spirit', ['brand','name','subcategory','distributor','cost','sizeML','costPerOz'], logEntries);
+      const mergedSpirits = mergeById(data.spirits || [], spirits, spiritSnapshots, deletedSpiritIds, 'spirit', ['brand','name','subcategory','distributor','cost','sizeML','costPerOz','specSheetName'], logEntries);
       const mergedOther = mergeById(data.otherIngredients || [], otherIngredients, otherSnapshots, deletedOtherIngredientIds, 'ingredient', ['name','category','sizeOz','cost','costPerOz','notes'], logEntries);
       data.spirits = mergedSpirits;
       data.otherIngredients = mergedOther;
@@ -1519,20 +1523,35 @@ function processXLSX(file) {
       bar.style.width = '100%';
       label.textContent = 'Done!';
 
-      // Full catalog replacement: mark every pre-import spirit as deleted so
-      // the id-merge in save() drops them instead of keeping them alongside
-      // the freshly imported rows.
-      spirits.forEach(s => deletedSpiritIds.add(s.id));
-      spirits = parsed;
-      const unpriced = parsed.filter(p => !p.cost || p.cost === 0).length;
+      // Re-import safe: MATCH each imported row to an existing spirit by
+      // brand+name and UPDATE it in place — keeping its id (so recipe cost-links
+      // survive) and any manual fields (e.g. specSheetName). New rows are added;
+      // existing spirits not in this file are KEPT untouched (never auto-deleted).
+      const normKey = r => `${(r.brand||'').trim().toLowerCase().replace(/\s+/g,' ')}|${(r.name||'').trim().toLowerCase().replace(/\s+/g,' ')}`;
+      const existingByKey = new Map();
+      spirits.forEach(s => { const k = normKey(s); if (!existingByKey.has(k)) existingByKey.set(k, s); });
+      let nUpdated = 0, nAdded = 0;
+      parsed.forEach(p => {
+        const ex = existingByKey.get(normKey(p));
+        if (ex) {
+          ex.brand = p.brand; ex.name = p.name; ex.category = p.category; ex.subcategory = p.subcategory;
+          ex.distributor = p.distributor; ex.sizeML = p.sizeML; ex.sizeLabel = p.sizeLabel;
+          ex.cost = p.cost; ex.costPerOz = p.costPerOz; ex.source = 'import';
+          nUpdated++;
+        } else {
+          spirits.push(p);  // genuinely new item — new id
+          nAdded++;
+        }
+      });
+      const unpriced = spirits.filter(p => !p.cost || p.cost === 0).length;
       importMeta = {
         filename: file.name,
-        count: parsed.length,
-        unpriced,
+        count: spirits.length,
+        unpriced, updated: nUpdated, added: nAdded,
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       };
       // One summary line in the change log instead of hundreds of per-row entries.
-      save({ suppressItemLog: true, summaryEntry: makeLogEntry({ collection:'spirit', item:'Spirit library', field:'imported spreadsheet', from:null, to:`${parsed.length} items (${file.name})`, action:'import' }) });
+      save({ suppressItemLog: true, summaryEntry: makeLogEntry({ collection:'spirit', item:'Spirit library', field:'imported spreadsheet', from:null, to:`${nUpdated} updated, ${nAdded} added (${file.name})`, action:'import' }) });
 
       setTimeout(() => {
         progress.classList.remove('show');
@@ -1541,7 +1560,7 @@ function processXLSX(file) {
         filterTable();
         populateFilterDropdowns();
         updateSubtitle();
-        showToast(`✓ Imported ${parsed.length} ingredients · ${unpriced} unpriced`);
+        showToast(`✓ Import: ${nUpdated} updated · ${nAdded} new · ${unpriced} unpriced`);
       }, 600);
     } catch(err) {
       progress.classList.remove('show');
@@ -1832,6 +1851,7 @@ function saveIngredient() {
   const ing = {
     id: crypto.randomUUID(),
     brand, name,
+    specSheetName: document.getElementById('f-specsheet').value.trim(),
     category: 'Spirit',
     subcategory: document.getElementById('f-sub').value,
     distributor: document.getElementById('f-dist').value.trim(),
@@ -1881,9 +1901,10 @@ function openEditModal(id) {
   const body = document.getElementById('edit-modal-body');
   body.innerHTML = `
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Brand</label><input type="text" class="form-input" id="e-brand" value="${ing.brand || ''}"></div>
-      <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="e-name" value="${ing.name || ''}"></div>
+      <div class="form-group"><label class="form-label">Brand</label><input type="text" class="form-input" id="e-brand" value="${(ing.brand || '').replace(/"/g,'&quot;')}"></div>
+      <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="e-name" value="${(ing.name || '').replace(/"/g,'&quot;')}"></div>
     </div>
+    <div class="form-group"><label class="form-label">Spec sheet name <span style="color:var(--ink-light);font-weight:400;font-size:11px;">— optional short name shown on the printed sheet</span></label><input type="text" class="form-input" id="e-specsheet" value="${(ing.specSheetName || '').replace(/"/g,'&quot;')}" placeholder="${(ing.name || '').replace(/"/g,'&quot;')}"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Subcategory</label>
         <select class="form-select" id="e-sub">
@@ -1924,6 +1945,7 @@ function saveEdit() {
     name: document.getElementById('e-name').value.trim(),
     subcategory: document.getElementById('e-sub').value,
     distributor: document.getElementById('e-dist').value.trim(),
+    specSheetName: document.getElementById('e-specsheet').value.trim(),
     cost, sizeML: ml,
     costPerOz: Math.round(costPerOz * 1000) / 1000
   };
