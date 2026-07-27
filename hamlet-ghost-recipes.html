@@ -310,6 +310,29 @@
   </div>
 </div>
 
+<!-- GLASSWARE MANAGE (add + remove) -->
+<div class="modal-overlay" id="glass-manage-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Glassware</div>
+      <button class="icon-btn" onclick="closeModal('glass-manage-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="glass-manage-list" style="max-height:300px;overflow-y:auto;margin-bottom:12px;"></div>
+      <div class="form-group">
+        <label class="form-label">Add a glass type</label>
+        <div style="display:flex;gap:6px;">
+          <input type="text" class="form-input" id="glass-add-input" placeholder="e.g. Tall Collins" onkeydown="if(event.key==='Enter')addGlassFromManage()">
+          <button class="btn btn-primary" onclick="addGlassFromManage()" style="white-space:nowrap;">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('glass-manage-modal')">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD FAMILY MODAL -->
 <div class="modal-overlay" id="family-modal">
   <div class="modal">
@@ -483,7 +506,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 4;
+const APP_BUILD = 5;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -750,7 +773,10 @@ const ICE_OPTIONS = ['Rocks','Big Cube','Collins Cube','Crushed','No Ice'];
 const FLAVOR_OPTIONS = ['Citrusy','Boozy','Bitter','Herbal','Sweet','Smoky','Savory','Tropical','Floral','Spicy'];
 const STYLE_OPTIONS = ['Stirred','Shaken','Built','Carbonated','Frozen'];
 const FAMILY_OPTIONS = ['Old Fashioned Family','Manhattan Family','Martini Family','Negroni Family','Classic Sour','Egg White / Foam Sour','Collins','Fizz','Highball','Aperitivo Style','Digestivo / Black Manhattan Style','Classic Tiki','Modern Tropical','Cream / Dessert Cocktails','Hot Cocktails','Savory / Culinary Cocktails','Carbonated Cocktails','Clarified Cocktails','Frozen Cocktails','Zero-Proof Cocktails'];
-const UNIT_OPTIONS = ['oz','ml','qt','cup','tsp','tbsp','bottle','g','kg','lb','dash','barspoon','rinse','drops','whole'];
+const UNIT_OPTIONS = ['oz','ml','qt','cup','tsp','tbsp','bottle','bottle-1l','g','kg','lb','dash','barspoon','rinse','drops','whole'];
+// Friendly labels for the unit dropdowns (value stays the canonical token).
+const UNIT_LABELS = { 'bottle':'bottle (750ml)', 'bottle-1l':'bottle (1L)' };
+function unitLabel(u) { return UNIT_LABELS[u] || u; }
 const NEGLIGIBLE_UNITS = ['dash','barspoon','rinse'];
 
 // ─── UNITS ──────────────────────────────────────────────────────────────────
@@ -768,6 +794,7 @@ const UNIT_ALIASES = {
   qt:'qt', quart:'qt', quarts:'qt',
   gal:'gal', gallon:'gal', gallons:'gal',
   bottle:'bottle', bottles:'bottle', btl:'bottle',
+  'bottle-1l':'bottle-1l', '1l':'bottle-1l', liter:'bottle-1l', litre:'bottle-1l', liters:'bottle-1l', litres:'bottle-1l',
   dash:'dash', dashes:'dash',
   barspoon:'barspoon', barspoons:'barspoon', bsp:'barspoon',
   rinse:'rinse', drop:'drop', drops:'drop',
@@ -782,7 +809,7 @@ function normUnit(u) {
   if (k.length > 1 && k.slice(-1) === 's' && UNIT_ALIASES[k.slice(0, -1)]) return UNIT_ALIASES[k.slice(0, -1)];
   return k;
 }
-const VOL_TO_OZ = { oz:1, ml:1/29.5735, tsp:1/6, tbsp:0.5, cup:8, pt:16, qt:32, gal:128, bottle:750/29.5735 };
+const VOL_TO_OZ = { oz:1, ml:1/29.5735, tsp:1/6, tbsp:0.5, cup:8, pt:16, qt:32, gal:128, bottle:750/29.5735, 'bottle-1l':1000/29.5735 };
 function unitIsVolume(u) { return VOL_TO_OZ[normUnit(u)] != null; }
 // Ounces for a qty+unit, or null if it isn't a convertible volume (weight/count/unknown).
 function unitToOz(qty, unit) {
@@ -790,6 +817,17 @@ function unitToOz(qty, unit) {
   if (f == null) return null;
   const q = parseFloat(qty);
   return q > 0 ? q * f : null;
+}
+// Renders <option>s for a unit <select>, showing friendly labels and selecting
+// the current unit by its NORMALIZED value (so "Bottles"/"OZ" show as selected).
+function unitOptionsHTML(currentUnit) {
+  const nu = normUnit(currentUnit);
+  const inList = UNIT_OPTIONS.includes(nu);
+  const opts = inList ? UNIT_OPTIONS : [currentUnit, ...UNIT_OPTIONS];
+  return opts.map(u => {
+    const sel = (inList ? normUnit(u) === nu : u === currentUnit) ? 'selected' : '';
+    return `<option value="${esc(u)}" ${sel}>${esc(unitLabel(u))}</option>`;
+  }).join('');
 }
 
 // ─── LOAD ─────────────────────────────────────────────────────────────────────
@@ -802,6 +840,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   // Load persisted custom glass and family options
   JSON.parse(localStorage.getItem('hg_custom_glasses') || '[]').forEach(g => { if (!GLASS_OPTIONS.includes(g)) GLASS_OPTIONS.push(g); });
+  JSON.parse(localStorage.getItem('hg_removed_glasses') || '[]').forEach(g => { const i = GLASS_OPTIONS.indexOf(g); if (i >= 0) GLASS_OPTIONS.splice(i, 1); });
   JSON.parse(localStorage.getItem('hg_custom_families') || '[]').forEach(f => { if (!FAMILY_OPTIONS.includes(f)) FAMILY_OPTIONS.push(f); });
   const rs = localStorage.getItem('hg_recipes');
   const sp = localStorage.getItem('hg_spirits');
@@ -1140,7 +1179,7 @@ function newRecipe() {
   const r = {
     id: crypto.randomUUID(),
     name: '', bartender: '', glass: 'Coupe', garnish: '',
-    menuPrice: null, summary: '',
+    menuPrice: 16, summary: '',
     style: '', dilute: false,
     ice: '', flavor: [], family: '',
     recipeType: 'cocktail',
@@ -1193,15 +1232,16 @@ function renderBuilder(r) {
           </div>
           <div class="form-group">
             <label class="form-label">Created by</label>
-            <input type="text" class="form-input" id="r-bartender" placeholder="Bartender name" value="${esc(r.bartender)}" oninput="updateField('bartender',this.value)">
+            <input type="text" class="form-input" id="r-bartender" list="bartender-options" placeholder="Select or add…" value="${esc(r.bartender)}" oninput="updateField('bartender',this.value)">
+            <datalist id="bartender-options">${bartenderOptions()}</datalist>
           </div>
         </div>
         <div class="form-grid-3" style="margin-bottom:10px;">
           <div class="form-group">
             <label class="form-label">Glass</label>
             <select class="form-select" id="r-glass" onchange="updateField('glass',this.value)">
-              ${GLASS_OPTIONS.map(g => `<option value="${g}" ${r.glass===g?'selected':''}>${g}</option>`).join('')}
-              <option value="__custom__">+ Add glass type</option>
+              ${(r.glass && !GLASS_OPTIONS.includes(r.glass) ? [r.glass, ...GLASS_OPTIONS] : GLASS_OPTIONS).map(g => `<option value="${esc(g)}" ${r.glass===g?'selected':''}>${esc(g)}</option>`).join('')}
+              <option value="__manage__">✎ Add / remove glasses…</option>
             </select>
           </div>
           <div class="form-group">
@@ -1210,7 +1250,7 @@ function renderBuilder(r) {
           </div>
           <div class="form-group">
             <label class="form-label">Menu price ($)</label>
-            <input type="number" class="form-input" id="r-price" placeholder="0.00" step="0.50" value="${r.menuPrice||''}" oninput="updateField('menuPrice',parseFloat(this.value)||null);updateCosting()">
+            <input type="number" class="form-input" id="r-price" placeholder="16.00" step="0.50" value="${r.menuPrice||''}" oninput="updateField('menuPrice',parseFloat(this.value)||null);updateCosting()" onkeydown="if((event.key==='ArrowUp'||event.key==='ArrowDown')&&!this.value){this.value='16.00';updateField('menuPrice',16);updateCosting();event.preventDefault();}">
           </div>
         </div>
         <div class="form-group">
@@ -1333,6 +1373,18 @@ function renderIngredientRows(r) {
   }).join('');
 }
 
+// Unique bartender names already used across recipes — feeds the "Created by"
+// combobox (a datalist: pick an existing name or type a new one).
+function bartenderOptions() {
+  const names = [...new Set((recipes || []).map(r => (r.bartender || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return names.map(n => `<option value="${esc(n)}"></option>`).join('');
+}
+// If this row links to a bar-prep recipe, return it (so we can show a chip that
+// navigates into it). Bought products (spirits/other) return null → no chip.
+function prepForRow(ing) {
+  if (!ing || !ing.ingredientId) return null;
+  return recipes.find(r => r.id === ing.ingredientId && r.recipeType === 'barprep') || null;
+}
 function renderSingleRow(ing, idx) {
   const cost = getCostForRow(ing);
   const isNeg = NEGLIGIBLE_UNITS.includes(ing.unit);
@@ -1345,15 +1397,17 @@ function renderSingleRow(ing, idx) {
         : ing.ingredientName
           ? `<span class="unlinked-pill">free</span>`
           : `<span class="ing-cost-cell">—</span>`;
+  const prep = prepForRow(ing);
 
   return `<div class="ing-row" id="row-${idx}" data-idx="${idx}">
     <input type="number" class="form-input ing-qty" style="height:30px;font-size:12px;font-family:var(--mono);text-align:center;" value="${ing.qty||''}" placeholder="0" min="0" step="0.25" oninput="updateIngField(${idx},'qty',this.value);updateCosting()">
     <select class="form-select" style="height:30px;font-size:12px;" onchange="updateIngField(${idx},'unit',this.value);updateCosting()">
-      ${UNIT_OPTIONS.map(u => `<option value="${u}" ${ing.unit===u?'selected':''}>${u}</option>`).join('')}
+      ${unitOptionsHTML(ing.unit)}
     </select>
     <div class="ac-wrap">
-      <input type="text" class="form-input" style="height:30px;font-size:12px;" placeholder="Search ingredients..." value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onblur="acBlur(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
+      <input type="text" class="form-input" style="height:30px;font-size:12px;${prep?'padding-right:58px;':''}" placeholder="Search ingredients..." value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onblur="acBlur(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
       <div class="ac-dropdown" id="ac-drop-${idx}" style="display:none;"></div>
+      ${prep ? `<span onmousedown="event.preventDefault();event.stopPropagation();loadRecipe('${prep.id}')" title="Open ${esc(prep.name)} — bar prep recipe" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:20px;background:var(--gold-dim);color:var(--gold);border:1px solid rgba(184,134,11,.35);cursor:pointer;z-index:3;white-space:nowrap;">↗ prep</span>` : ''}
     </div>
     <div class="pour-btn" onclick="cyclePourStyle(${idx})" title="${pourStyleTitle(ing.pourStyle)}">${pourStyleGlyph(ing.pourStyle)}</div>
     <div style="text-align:right;padding-right:4px;">${costHTML}</div>
@@ -1386,7 +1440,7 @@ function renderBatchGroupRow(ing, idx) {
         <div class="batch-child-row">
           <input type="number" class="form-input" style="height:26px;font-size:11px;font-family:var(--mono);text-align:center;" value="${child.qty||''}" placeholder="0" step="0.25" oninput="updateBatchChild(${idx},${ci},'qty',this.value);updateCosting()">
           <select class="form-select" style="height:26px;font-size:11px;" onchange="updateBatchChild(${idx},${ci},'unit',this.value);updateCosting()">
-            ${UNIT_OPTIONS.map(u => `<option value="${u}" ${child.unit===u?'selected':''}>${u}</option>`).join('')}
+            ${unitOptionsHTML(child.unit)}
           </select>
           <span class="batch-child-label">${esc(child.ingredientName||'—')}</span>
           <span style="font-family:var(--mono);font-size:11px;color:var(--green);text-align:right;">${getCostForRow(child)!==null?'$'+getCostForRow(child).toFixed(3):'—'}</span>
@@ -2079,11 +2133,71 @@ function attachGlassListener() {
   const sel = document.getElementById('r-glass');
   if (!sel) return;
   sel.addEventListener('change', () => {
-    if (sel.value === '__custom__') {
+    if (sel.value === '__manage__') {
       sel.value = currentRecipe()?.glass || GLASS_OPTIONS[0];
-      openGlassModal();
+      openGlassManage();
     }
   });
+}
+
+// ─── GLASSWARE MANAGE (add + remove) ─────────────────────────────────────────
+function openGlassManage() {
+  renderGlassManageList();
+  const inp = document.getElementById('glass-add-input'); if (inp) inp.value = '';
+  document.getElementById('glass-manage-modal').classList.add('open');
+  setTimeout(() => { const i = document.getElementById('glass-add-input'); if (i) i.focus(); }, 50);
+}
+function renderGlassManageList() {
+  const el = document.getElementById('glass-manage-list');
+  if (!el) return;
+  if (GLASS_OPTIONS.length === 0) { el.innerHTML = '<div style="font-size:12px;color:var(--ink-light);font-style:italic;">No glasses yet — add one below.</div>'; return; }
+  // Count how many recipes use each glass so removal can warn.
+  const inUse = {};
+  (recipes || []).forEach(r => { if (r.glass) inUse[r.glass] = (inUse[r.glass] || 0) + 1; });
+  el.innerHTML = GLASS_OPTIONS.map(g => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;margin-bottom:4px;">
+      <span style="font-size:13px;">${esc(g)}${inUse[g] ? ` <span style="font-family:var(--mono);font-size:10px;color:var(--ink-light);">· ${inUse[g]} recipe${inUse[g]>1?'s':''}</span>` : ''}</span>
+      <button class="icon-btn danger" style="font-size:12px;" title="Remove ${esc(g)}" onclick="removeGlassType('${esc(g).replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+function addGlassFromManage() {
+  const inp = document.getElementById('glass-add-input');
+  const name = (inp ? inp.value : '').trim();
+  if (!name) { showToast('Enter a glass name'); return; }
+  if (!GLASS_OPTIONS.includes(name)) {
+    GLASS_OPTIONS.push(name);
+    const custom = JSON.parse(localStorage.getItem('hg_custom_glasses') || '[]');
+    if (!custom.includes(name)) { custom.push(name); localStorage.setItem('hg_custom_glasses', JSON.stringify(custom)); }
+    // If it was previously removed, un-remove it.
+    const removed = JSON.parse(localStorage.getItem('hg_removed_glasses') || '[]').filter(g => g !== name);
+    localStorage.setItem('hg_removed_glasses', JSON.stringify(removed));
+  }
+  if (inp) inp.value = '';
+  renderGlassManageList();
+  refreshGlassSelect();
+  showToast('✓ Added glass: ' + name);
+}
+function removeGlassType(name) {
+  const inUse = (recipes || []).filter(r => r.glass === name).length;
+  if (inUse > 0 && !confirm(`${name} is used by ${inUse} recipe${inUse>1?'s':''}. Remove it from the list anyway? Those recipes keep their glass; it just won't appear as a choice.`)) return;
+  const i = GLASS_OPTIONS.indexOf(name); if (i >= 0) GLASS_OPTIONS.splice(i, 1);
+  // Persist: drop from custom list if it was custom; otherwise record as a removed built-in.
+  const custom = JSON.parse(localStorage.getItem('hg_custom_glasses') || '[]');
+  if (custom.includes(name)) {
+    localStorage.setItem('hg_custom_glasses', JSON.stringify(custom.filter(g => g !== name)));
+  } else {
+    const removed = JSON.parse(localStorage.getItem('hg_removed_glasses') || '[]');
+    if (!removed.includes(name)) { removed.push(name); localStorage.setItem('hg_removed_glasses', JSON.stringify(removed)); }
+  }
+  renderGlassManageList();
+  refreshGlassSelect();
+  showToast('Removed glass: ' + name);
+}
+function refreshGlassSelect() {
+  const r = currentRecipe(); const sel = document.getElementById('r-glass');
+  if (!r || !sel) return;
+  const list = (r.glass && !GLASS_OPTIONS.includes(r.glass)) ? [r.glass, ...GLASS_OPTIONS] : GLASS_OPTIONS;
+  sel.innerHTML = list.map(g => `<option value="${esc(g)}" ${r.glass===g?'selected':''}>${esc(g)}</option>`).join('') + '<option value="__manage__">✎ Add / remove glasses…</option>';
 }
 
 function openGlassModal() {
@@ -2276,11 +2390,10 @@ function renderBPCompRows(r) {
   const ings = r.ingredients || [];
   if (ings.length === 0) return '<div style="font-size:12px;color:var(--ink-ghost);font-style:italic;padding:4px 2px;">No components yet — add ingredients to auto-cost this batch.</div>';
   return ings.map((ing, idx) => {
-    const units = UNIT_OPTIONS.includes(ing.unit) ? UNIT_OPTIONS : [ing.unit, ...UNIT_OPTIONS];
-    return `<div class="ing-row" id="row-${idx}" data-idx="${idx}" style="display:grid;grid-template-columns:56px 82px 1fr 74px 28px;gap:6px;align-items:center;">
+    return `<div class="ing-row" id="row-${idx}" data-idx="${idx}" style="display:grid;grid-template-columns:56px 92px 1fr 74px 28px;gap:6px;align-items:center;">
       <input type="text" class="form-input" style="height:30px;font-size:12px;font-family:var(--mono);text-align:center;" value="${esc(ing.qty||'')}" placeholder="0" oninput="updateBPComp(${idx},'qty',this.value)">
       <select class="form-select" style="height:30px;font-size:12px;" onchange="updateBPComp(${idx},'unit',this.value)">
-        ${units.map(u => `<option value="${esc(u)}" ${ing.unit===u?'selected':''}>${esc(u)}</option>`).join('')}
+        ${unitOptionsHTML(ing.unit)}
       </select>
       <div class="ac-wrap">
         <input type="text" class="form-input" style="height:30px;font-size:12px;" placeholder="Search ingredients…" value="${esc(ing.ingredientName||'')}" oninput="acSearch(${idx},this.value)" onfocus="acSearch(${idx},this.value)" onblur="acBlur(${idx},this.value)" onkeydown="acKeyNav(event,${idx})" autocomplete="off" id="ac-input-${idx}">
@@ -2433,11 +2546,31 @@ function updateBPManual(field, val) {
   refreshBPYield();
 }
 
+// Cocktails that pour this prep (directly or inside a batch group).
+function cocktailsUsingPrep(prepId) {
+  return recipes.filter(r => r.recipeType !== 'barprep' && (r.ingredients || []).some(ing =>
+    ing.ingredientId === prepId ||
+    (ing.isBatchGroup && (ing.children || []).some(c => c.ingredientId === prepId))
+  ));
+}
+function renderUsedInBanner(r) {
+  const users = cocktailsUsingPrep(r.id);
+  if (users.length === 0) {
+    return `<div style="font-family:var(--mono);font-size:11px;color:var(--ink-light);padding:8px 12px;margin-bottom:12px;border:1px dashed var(--border-mid);border-radius:var(--radius);">Not used in any cocktail yet.</div>`;
+  }
+  const links = users.map(c => `<span onclick="loadRecipe('${c.id}')" style="color:var(--blue);cursor:pointer;border-bottom:1px solid rgba(26,74,122,.35);">${esc(c.name || 'Untitled')} ↗</span>`).join('<span style="color:var(--ink-ghost);"> · </span>');
+  return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--gold-dim);border:1px solid rgba(184,134,11,.3);border-radius:var(--radius);padding:9px 13px;margin-bottom:12px;">
+    <span style="font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);">Used in</span>
+    <span style="font-size:13px;">${links}</span>
+  </div>`;
+}
 function renderBarPrepBuilder(r) {
   migrateBPToIngredients(r);
   recomputeBPCost(r);
   document.getElementById('builder-area').innerHTML = `
   <div class="builder">
+
+    ${renderUsedInBanner(r)}
 
     <!-- TYPE TOGGLE -->
     <div class="card">

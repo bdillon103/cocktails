@@ -556,7 +556,7 @@ function currentUserEmail() {
 }
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 4;
+const APP_BUILD = 5;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -976,7 +976,9 @@ function renderRecipeBlock(r, showMethod, showGarnish) {
         }
         const qty = ing.qty ? formatQty(ing.qty, ing.unit) : '';
         const pour = ing.pourStyle === 'heavy' ? ' <span style="color:#c8392b;font-size:0.85em;">▲ heavy</span>' : ing.pourStyle === 'scant' ? ' <span style="color:#26608a;font-size:0.85em;">▼ scant</span>' : '';
-        return `<li><span class="ing-qty-label">${esc(qty)}</span><span>${esc(ing.ingredientName || '')}${pour}</span></li>`;
+        const isPrep = ing.ingredientId && allRecipes.some(p => p.id === ing.ingredientId && p.recipeType === 'barprep');
+        const prepMark = isPrep ? ' <span style="color:#9c7208;" title="House bar prep — full recipe on the Bar Prep page">▸</span>' : '';
+        return `<li><span class="ing-qty-label">${esc(qty)}</span><span>${esc(ing.ingredientName || '')}${prepMark}${pour}</span></li>`;
       }).join('')}
     </ul>
     ${showMethod && (r.style || r.glass || r.ice) ? `<div class="recipe-method">${[r.style, r.glass, r.ice].filter(Boolean).join(', ')}</div>` : ''}
