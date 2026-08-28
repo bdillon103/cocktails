@@ -202,6 +202,18 @@ if (TENANT !== 'main') {
 }
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
+async function fetchWithTimeout(url, opts, ms) {
+  // Every network call MUST time out. Without this, a fetch that stalls (tab
+  // slept/backgrounded mid-request, a network switch) never settles — and because
+  // recipe saves are single-flight (_saveDrain) and the token refresh is cached
+  // (sessionRefresh), ONE stalled request permanently wedges all saving on the tab
+  // with no error, until a reload that loses unsaved edits.
+  var ctrl = new AbortController();
+  var t = setTimeout(function(){ ctrl.abort(); }, ms || 15000);
+  try { return await fetch(url, Object.assign({}, opts || {}, { signal: ctrl.signal })); }
+  finally { clearTimeout(t); }
+}
+
 async function sbRequest(method, path, body) {
   const session = await getValidSession();
   const headers = {
@@ -209,7 +221,7 @@ async function sbRequest(method, path, body) {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`
   };
-  const res = await fetch(SUPABASE_URL + path, {
+  const res = await fetchWithTimeout(SUPABASE_URL + path, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined
@@ -241,7 +253,7 @@ async function getValidSession() {
   if (session.expires_at && Date.now() / 1000 < session.expires_at - 60) return session;
   if (!session.refresh_token) { localStorage.removeItem('hg_session'); return null; }
   if (!sessionRefresh) {
-    sessionRefresh = fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    sessionRefresh = fetchWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: session.refresh_token })
@@ -256,7 +268,7 @@ async function getValidSession() {
 }
 
 async function signIn(email, password) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
@@ -270,7 +282,7 @@ async function signIn(email, password) {
 async function signOut() {
   const session = getSession();
   if (session) {
-    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+    await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/logout`, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${session.access_token}` }
     }).catch(() => {});
@@ -312,11 +324,11 @@ async function loadAppData() {
 const PAGE_ID = 'dashboard';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 6;
+const APP_BUILD = 7;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
-    const res = await fetch('version.json?ts=' + Date.now(), { cache: 'no-store' });
+    const res = await fetchWithTimeout('version.json?ts=' + Date.now(), { cache: 'no-store' }, 10000);
     if (!res.ok) return;
     const j = await res.json();
     if (typeof j.build === 'number' && j.build > APP_BUILD) { appIsStale = true; showStaleOverlay(j.build); }
@@ -352,7 +364,7 @@ async function patchRows(data, baseRev) {
   const headers = { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json',
     'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`, 'Prefer': 'return=representation' };
   const cond = baseRev != null ? `&data->_meta->>rev=eq.${baseRev}` : '';
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_data?id=eq.${ROW}${cond}`, { method: 'PATCH', headers, body: JSON.stringify({ data }) });
+  const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/app_data?id=eq.${ROW}${cond}`, { method: 'PATCH', headers, body: JSON.stringify({ data }) });
   if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text().catch(()=>'')).slice(0, 140));
   return res.json().catch(() => null);
 }
@@ -365,6 +377,7 @@ async function writeBlob(data, baseRev) {
     localStorage.setItem(LS_KEY, JSON.stringify(data));
     return true;
   } catch(e) {
+    if (e && e.name === 'AbortError') throw e;  // network timeout, not a filter problem — fail fast, keep CAS on
     if (useCond) { casMode = 'off'; await patchRows(data, null); localStorage.setItem(LS_KEY, JSON.stringify(data)); return true; }
     throw e;
   }
