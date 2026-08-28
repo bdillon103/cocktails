@@ -232,7 +232,8 @@ async function sbRequest(method, path, body) {
   };
   const res = await fetchWithTimeout(SUPABASE_URL + path, {
     method,
-    headers,
+    cache: 'no-store',   // NEVER read the blob from the browser HTTP cache — a stale
+    headers,             // read makes a save merge onto old data and revert saved edits
     body: body ? JSON.stringify(body) : undefined
   });
   if (!res.ok) {
@@ -333,7 +334,7 @@ async function loadAppData() {
 // NB: the Menu Grid is read-only — it never writes the blob — but it keeps the
 // same hardened data layer as the other pages for consistency.
 const PAGE_ID = 'grid';
-const APP_BUILD = 7;
+const APP_BUILD = 8;
 let appIsStale = false;
 function currentUserEmail() {
   try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }

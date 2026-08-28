@@ -223,7 +223,8 @@ async function sbRequest(method, path, body) {
   };
   const res = await fetchWithTimeout(SUPABASE_URL + path, {
     method,
-    headers,
+    cache: 'no-store',   // NEVER read the blob from the browser HTTP cache — a stale
+    headers,             // read makes a save merge onto old data and revert saved edits
     body: body ? JSON.stringify(body) : undefined
   });
   if (!res.ok) {
@@ -324,7 +325,7 @@ async function loadAppData() {
 const PAGE_ID = 'dashboard';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 7;
+const APP_BUILD = 8;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
