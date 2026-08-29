@@ -519,7 +519,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 9;
+const APP_BUILD = 10;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -1073,6 +1073,8 @@ function recipeIsDirty(r) {
 let _saveTimer = null;
 let _saveDrain = null;
 let _savePending = false;
+let _drainGen = 0;      // generation of the active drain — lets the watchdog orphan a stuck one
+let _drainAt = 0;       // when the active drain started (ms), for the stuck-save watchdog
 const SAVE_DEBOUNCE_MS = 450;
 function saveRecipes() {          // debounced entry point (keeps all 32 callers working)
   if (TABLES_MODE) return;        // read-only tables preview — never write to the blob here
@@ -1082,17 +1084,38 @@ function saveRecipes() {          // debounced entry point (keeps all 32 callers
 }
 function startSaveDrain() {
   clearTimeout(_saveTimer); _saveTimer = null;
-  if (!_saveDrain) {
-    _saveDrain = (async () => {
-      try {
-        // Loop so keystrokes that arrive mid-save are folded into the next pass —
-        // the last pass always reads the live recipe object (latest value).
-        while (_savePending) { _savePending = false; await commitRecipes(); }
-      } finally { _saveDrain = null; }
-    })();
-  }
+  if (_saveDrain) return _saveDrain;
+  const gen = ++_drainGen;
+  _drainAt = Date.now();
+  _saveDrain = (async () => {
+    try {
+      // Loop so keystrokes that arrive mid-save are folded into the next pass —
+      // the last pass always reads the live recipe object (latest value).
+      while (_savePending) { _savePending = false; await commitRecipes(); }
+    } finally { if (_drainGen === gen) { _saveDrain = null; _drainAt = 0; } }
+  })();
   return _saveDrain;
 }
+// Watchdog for the single-flight save lock. A save takes a second or two; if the
+// drain is still "in progress" after 20s it has WEDGED — a fetch that hung without
+// settling (the freeze we diagnosed: _saveDrain stuck true, no network, only a
+// reload fixed it). Force-release the lock and retry — exactly the manual recovery
+// that was confirmed to work. The generation bump orphans the stuck drain so its
+// late finally can't clobber the fresh one; CAS + no-store make any late "zombie"
+// write safe (it re-reads fresh / version-conflicts instead of reverting). This
+// removes the failure mode where one stuck save permanently froze all the others.
+setInterval(function () {
+  if (_saveDrain && _drainAt && (Date.now() - _drainAt) > 20000) {
+    _drainGen++;                 // orphan the stuck drain
+    _saveDrain = null;
+    sessionRefresh = null;       // also clear a possibly-hung token refresh
+    _drainAt = 0;
+    if (_savePending || _saveTimer) {
+      showUnsavedError('Saving was stuck — recovered automatically and retrying. Your change is not lost.');
+      saveRecipes();
+    }
+  }
+}, 5000);
 // Force any pending/in-flight save to finish. Call before leaving the page.
 async function flushSaves() {
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
