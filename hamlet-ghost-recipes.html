@@ -519,7 +519,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 8;
+const APP_BUILD = 9;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -845,6 +845,61 @@ function unitOptionsHTML(currentUnit) {
 }
 
 // ─── LOAD ─────────────────────────────────────────────────────────────────────
+// ─── PHASE 2 · READ FROM RELATIONAL TABLES (behind ?src=tables) ─────────────
+// Read-only preview: rebuild recipes from the new cocktails / cocktail_ingredients
+// tables instead of the JSON blob, to prove the migration reconstructs every
+// recipe. Saving is DISABLED in this mode; staff use the normal URL and are
+// unaffected. Once this is confirmed on real data, the write path follows.
+const TABLES_MODE = new URLSearchParams(location.search).get('src') === 'tables';
+
+function rowToRecipe(c, lines) {
+  const qtyOf = l => (l.amount_raw != null ? l.amount_raw : (l.amount != null ? String(l.amount) : ''));
+  const r = {
+    id: c.id, name: c.name || '', recipeType: c.recipe_type || 'cocktail',
+    bartender: c.bartender || '', glass: c.glass || '', ice: c.ice || '', style: c.style || '',
+    garnish: c.garnish || '', methodNotes: c.method_notes || '', summary: c.menu_description || '',
+    menuPrice: c.menu_price != null ? Number(c.menu_price) : null,
+    family: c.family || '', flavor: Array.isArray(c.flavor) ? c.flavor : [],
+    dilute: !!c.dilute, isHousePrep: !!c.is_house_prep, bpYield: c.prep_yield || '',
+    createdAt: c.created_at ? Date.parse(c.created_at) : undefined,
+    _version: c.version                 // carried for the Phase 2 per-cocktail save guard
+  };
+  if (c.batch_qty != null) r.batchQty = Number(c.batch_qty);
+  if (r.recipeType === 'barprep') {
+    r.bpIngredients = lines.map(l => ({ qty: qtyOf(l), unit: l.unit || '', name: l.ingredient_name || '' }));
+    r.bpSteps = (c.legacy && Array.isArray(c.legacy.bpSteps)) ? c.legacy.bpSteps : [];
+    r.ingredients = [];
+  } else {
+    r.ingredients = lines.map(l => ({
+      id: l.id, qty: qtyOf(l), unit: l.unit || 'oz',
+      ingredientId: l.ingredient_id || l.prep_id || null,
+      ingredientName: l.ingredient_name || '',
+      pourStyle: l.pour_style || null
+    }));
+  }
+  return r;
+}
+
+async function loadRecipesFromTables() {
+  const cocktails = await sbRequest('GET', '/rest/v1/cocktails?select=*') || [];
+  const lines     = await sbRequest('GET', '/rest/v1/cocktail_ingredients?select=*') || [];
+  const byCocktail = new Map();
+  lines.forEach(l => { if (!byCocktail.has(l.cocktail_id)) byCocktail.set(l.cocktail_id, []); byCocktail.get(l.cocktail_id).push(l); });
+  return cocktails.map(c => {
+    const ls = (byCocktail.get(c.id) || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    return rowToRecipe(c, ls);
+  });
+}
+
+function showTablesPreviewBanner(n) {
+  if (document.getElementById('tables-preview-banner')) return;
+  const el = document.createElement('div');
+  el.id = 'tables-preview-banner';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1f5488;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:9px 16px;text-align:center;z-index:99999;box-shadow:0 -2px 10px rgba(0,0,0,0.2);';
+  el.textContent = '👁 Read-only tables preview — rebuilt ' + n + ' recipes from the new tables. Editing is off here. (Normal editing: drop ?src=tables from the URL.)';
+  document.body.appendChild(el);
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   if (!requireAuth()) return;
   const session = getSession();
@@ -866,9 +921,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   seedCocktailRecipes();
   // reload after seed
   const appData2 = await loadAppData();
-  recipes = appData2.recipes || [];
   spirits = appData2.spirits || [];
   otherIngredients = appData2.otherIngredients || [];
+  if (TABLES_MODE) {
+    try {
+      recipes = await loadRecipesFromTables();
+      showTablesPreviewBanner(recipes.length);
+    } catch (e) {
+      recipes = appData2.recipes || [];
+      alert('Tables preview failed to load: ' + (e && e.message ? e.message : e) + '\nShowing the current (blob) data instead.');
+    }
+  } else {
+    recipes = appData2.recipes || [];
+  }
   snapshotRecipes();
   renderSidebar();
   updateSubtitle();
@@ -1010,6 +1075,7 @@ let _saveDrain = null;
 let _savePending = false;
 const SAVE_DEBOUNCE_MS = 450;
 function saveRecipes() {          // debounced entry point (keeps all 32 callers working)
+  if (TABLES_MODE) return;        // read-only tables preview — never write to the blob here
   _savePending = true;
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => { startSaveDrain(); }, SAVE_DEBOUNCE_MS);
