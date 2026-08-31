@@ -519,7 +519,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 11;
+const APP_BUILD = 12;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -867,7 +867,7 @@ function rowToRecipe(c, lines) {
   if (c.batch_qty != null) r.batchQty = Number(c.batch_qty);
   if (r.recipeType === 'barprep') {
     r.bpIngredients = lines.map(l => ({ qty: qtyOf(l), unit: l.unit || '', name: l.ingredient_name || '' }));
-    r.bpSteps = (c.legacy && Array.isArray(c.legacy.bpSteps)) ? c.legacy.bpSteps : [];
+    r.bpSteps = (Array.isArray(c.steps) && c.steps.length) ? c.steps : ((c.legacy && Array.isArray(c.legacy.bpSteps)) ? c.legacy.bpSteps : []);
     r.ingredients = [];
   } else {
     r.ingredients = lines.map(l => ({
@@ -918,6 +918,7 @@ function recipeToPayload(r) {
     flavor: Array.isArray(r.flavor) ? r.flavor : [],
     is_house_prep: !!r.isHousePrep, prep_yield: r.bpYield || '', dilute: !!r.dilute,
     batch_qty: (r.batchQty != null ? r.batchQty : null),
+    steps: (r.recipeType === 'barprep' ? (Array.isArray(r.bpSteps) ? r.bpSteps : []) : []),
     lines: lines
   };
 }
@@ -936,10 +937,6 @@ async function drainTablesSave() {
       _tblPending = false;
       const r = currentRecipe();
       if (!r) break;
-      if (r.recipeType === 'barprep') {   // steps aren't in the tables yet — keep read-only so none are lost
-        showUnsavedError('Bar-prep editing via the tables is coming next — this one is read-only for now (cocktails save fine).');
-        continue;
-      }
       try {
         const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) });
         const out = Array.isArray(res) ? res[0] : res;
