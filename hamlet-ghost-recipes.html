@@ -520,7 +520,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 14;
+const APP_BUILD = 15;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -938,7 +938,7 @@ function recipeToPayload(r) {
 // at drain time silently dropped edits whenever you switched recipes (or created a
 // new one) within the 450ms window. The dirty-set makes each edit save the recipe
 // it actually belongs to, and survive recipe-switching.
-let _tblTimer = null, _tblSaving = false;
+let _tblTimer = null, _tblSaving = false, _tblDrainPromise = null, _suppressDrainToast = false;
 const _tblDirty = new Set();
 function tablesSavePending() { return !!_tblTimer || _tblSaving || _tblDirty.size > 0; }
 function scheduleTablesSave() {
@@ -947,29 +947,42 @@ function scheduleTablesSave() {
   clearTimeout(_tblTimer);
   _tblTimer = setTimeout(drainTablesSave, SAVE_DEBOUNCE_MS);
 }
-async function drainTablesSave() {
+function drainTablesSave() {
   clearTimeout(_tblTimer); _tblTimer = null;
-  if (_tblSaving) return;
+  if (_tblSaving) return _tblDrainPromise;   // already draining — hand back that promise so callers can await it
   _tblSaving = true;
-  try {
-    while (_tblDirty.size) {
-      const id = _tblDirty.values().next().value;
-      _tblDirty.delete(id);
-      const r = recipes.find(x => x.id === id);
-      if (!r) continue;                  // recipe was deleted — nothing to save
-      try {
-        const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) }, { keepalive: true });
-        const out = Array.isArray(res) ? res[0] : res;
-        if (out && out.ok) { r._version = out.version; hideUnsavedError(); showToast('✓ Saved'); }
-        else if (out && out.conflict) { showConflictBanner(out.current_version); }   // needs a reload, not a retry
-        else { throw new Error('unexpected save response'); }
-      } catch (e) {
-        _tblDirty.add(id);   // keep this recipe dirty; a later edit/flush retries it
-        showUnsavedError('Save failed — ' + (e && e.message ? e.message : e) + '. Your change isn’t lost; keep editing to retry.');
-        break;
+  _tblDrainPromise = (async () => {
+    try {
+      while (_tblDirty.size) {
+        const id = _tblDirty.values().next().value;
+        _tblDirty.delete(id);
+        const r = recipes.find(x => x.id === id);
+        if (!r) continue;                  // recipe was deleted — nothing to save
+        try {
+          const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) }, { keepalive: true });
+          const out = Array.isArray(res) ? res[0] : res;
+          if (out && out.ok) { r._version = out.version; hideUnsavedError(); if (!_suppressDrainToast) showToast('✓ Saved'); }
+          else if (out && out.conflict) { showConflictBanner(out.current_version); }   // needs a reload, not a retry
+          else { throw new Error('unexpected save response'); }
+        } catch (e) {
+          _tblDirty.add(id);   // keep this recipe dirty; a later edit/flush retries it
+          showUnsavedError('Save failed — ' + (e && e.message ? e.message : e) + '. Your change isn’t lost; keep editing to retry.');
+          break;
+        }
       }
-    }
-  } finally { _tblSaving = false; }
+    } finally { _tblSaving = false; }
+  })();
+  return _tblDrainPromise;
+}
+// Re-read one recipe's authoritative row + lines straight from the tables, rebuilt
+// into the in-memory recipe shape. Used by the Save button to show exactly what got
+// committed (not an optimistic toast).
+async function reloadRecipeFromTables(id) {
+  const rows = await sbRequest('GET', '/rest/v1/cocktails?id=eq.' + id + '&select=*');
+  if (!rows || !rows.length) return null;
+  const lines = await sbRequest('GET', '/rest/v1/cocktail_ingredients?cocktail_id=eq.' + id + '&select=*') || [];
+  lines.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  return rowToRecipe(rows[0], lines);
 }
 function showConflictBanner(currentVersion) {
   let el = document.getElementById('save-error-banner');
@@ -1209,7 +1222,16 @@ function anySavePending() {
 }
 // Force any pending/in-flight save to finish. Call before leaving the page.
 async function flushSaves() {
-  if (TABLES_MODE) { clearTimeout(_tblTimer); _tblTimer = null; if (_tblDirty.size || _tblSaving) await drainTablesSave(); return; }
+  if (TABLES_MODE) {
+    clearTimeout(_tblTimer); _tblTimer = null;
+    // Wait out an in-flight auto-save AND drain anything still dirty. Bounded so a
+    // persistently-failing save can't spin forever (it stops once the error shows).
+    for (let i = 0; i < 6 && (_tblDirty.size || _tblSaving); i++) {
+      await drainTablesSave();
+      if (document.getElementById('save-error-banner')) break;
+    }
+    return;
+  }
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   if (_savePending || _saveDrain) await startSaveDrain();
 }
@@ -1545,7 +1567,7 @@ function renderBuilder(r) {
     <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${r.id}')"><i class="ti ti-trash"></i> Delete recipe</button>
     <div style="display:flex;gap:8px;">
       <button class="btn" onclick="duplicateRecipe('${r.id}')"><i class="ti ti-copy"></i> Duplicate</button>
-      <button class="btn btn-primary" onclick="saveCurrentRecipe()"><i class="ti ti-device-floppy"></i> Save recipe</button>
+      <button class="btn btn-primary" onclick="saveCurrentRecipe(this)"><i class="ti ti-device-floppy"></i> Save recipe</button>
     </div>
   </div>
   `;
@@ -2452,13 +2474,38 @@ function confirmAddFamily() {
 }
 
 // ─── SAVE / DUPLICATE / DELETE ────────────────────────────────────────────────
-async function saveCurrentRecipe() {
+async function saveCurrentRecipe(btn) {
   const r = currentRecipe();
   if (!r) return;
-  saveRecipes();          // mark dirty
-  await flushSaves();     // and actually wait for it to land before confirming
-  renderSidebar();
-  showToast(`✓ Saved: ${r.name || 'Untitled'}`);
+  const label = btn && btn.innerHTML;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Saving…'; }
+  _suppressDrainToast = true;   // the button gives ONE explicit confirmation; skip the auto-save toast
+  try {
+    saveRecipes();          // mark dirty / schedule
+    await flushSaves();     // actually wait for the write to land
+
+    // Did it really commit? tables: recipe still dirty ⇒ failed; either mode: an error banner is up.
+    const failed = (TABLES_MODE && _tblDirty.has(r.id)) || !!document.getElementById('save-error-banner');
+    if (failed) { showToast('⚠ Not saved — see the message at the bottom of the screen'); return; }
+
+    // Committed. In tables mode, re-read the authoritative row from the DB and render THAT,
+    // so the page shows exactly what's stored — a real commit, not just a toast.
+    if (TABLES_MODE) {
+      try {
+        const fresh = await reloadRecipeFromTables(r.id);
+        if (fresh) {
+          const i = recipes.findIndex(x => x.id === r.id);
+          if (i >= 0) recipes[i] = fresh;
+          if (currentRecipeId === r.id) renderBuilder(fresh);
+        }
+      } catch (e) { /* write already succeeded; the re-read is best-effort */ }
+    }
+    renderSidebar();
+    showToast(`✓ Saved: ${r.name || 'Untitled'}`);
+  } finally {
+    _suppressDrainToast = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = label; }
+  }
 }
 
 function duplicateRecipe(id) {
@@ -2848,7 +2895,7 @@ function renderBarPrepBuilder(r) {
       <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${r.id}')"><i class="ti ti-trash"></i> Delete</button>
       <div style="display:flex;gap:8px;">
         <button class="btn" onclick="duplicateRecipe('${r.id}')"><i class="ti ti-copy"></i> Duplicate</button>
-        <button class="btn btn-primary" onclick="saveCurrentRecipe()"><i class="ti ti-device-floppy"></i> Save</button>
+        <button class="btn btn-primary" onclick="saveCurrentRecipe(this)"><i class="ti ti-device-floppy"></i> Save</button>
       </div>
     </div>
   </div>`;
