@@ -407,7 +407,7 @@ async function fetchWithTimeout(url, opts, ms) {
   finally { clearTimeout(t); }
 }
 
-async function sbRequest(method, path, body) {
+async function sbRequest(method, path, body, opts) {
   const session = await getValidSession();
   const headers = {
     'apikey': SUPABASE_KEY,
@@ -418,7 +418,8 @@ async function sbRequest(method, path, body) {
     method,
     cache: 'no-store',   // NEVER read the blob from the browser HTTP cache — a stale
     headers,             // read makes a save merge onto old data and revert saved edits
-    body: body ? JSON.stringify(body) : undefined
+    body: body ? JSON.stringify(body) : undefined,
+    ...(opts || {})      // e.g. { keepalive: true } so a save in flight survives a refresh/close
   });
   if (!res.ok) {
     const err = await res.text();
@@ -519,7 +520,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 12;
+const APP_BUILD = 13;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -922,9 +923,17 @@ function recipeToPayload(r) {
     lines: lines
   };
 }
-let _tblTimer = null, _tblSaving = false, _tblPending = false;
+// Track WHICH recipes have unsaved edits, by id, captured at the moment of the
+// edit — NOT "whatever is selected when the debounce fires". Saving currentRecipe()
+// at drain time silently dropped edits whenever you switched recipes (or created a
+// new one) within the 450ms window. The dirty-set makes each edit save the recipe
+// it actually belongs to, and survive recipe-switching.
+let _tblTimer = null, _tblSaving = false;
+const _tblDirty = new Set();
+function tablesSavePending() { return !!_tblTimer || _tblSaving || _tblDirty.size > 0; }
 function scheduleTablesSave() {
-  _tblPending = true;
+  const r = currentRecipe();
+  if (r && r.id) _tblDirty.add(r.id);   // capture the edited recipe NOW
   clearTimeout(_tblTimer);
   _tblTimer = setTimeout(drainTablesSave, SAVE_DEBOUNCE_MS);
 }
@@ -933,18 +942,19 @@ async function drainTablesSave() {
   if (_tblSaving) return;
   _tblSaving = true;
   try {
-    while (_tblPending) {
-      _tblPending = false;
-      const r = currentRecipe();
-      if (!r) break;
+    while (_tblDirty.size) {
+      const id = _tblDirty.values().next().value;
+      _tblDirty.delete(id);
+      const r = recipes.find(x => x.id === id);
+      if (!r) continue;                  // recipe was deleted — nothing to save
       try {
-        const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) });
+        const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) }, { keepalive: true });
         const out = Array.isArray(res) ? res[0] : res;
         if (out && out.ok) { r._version = out.version; hideUnsavedError(); showToast('✓ Saved'); }
-        else if (out && out.conflict) { showConflictBanner(out.current_version); }
+        else if (out && out.conflict) { showConflictBanner(out.current_version); }   // needs a reload, not a retry
         else { throw new Error('unexpected save response'); }
       } catch (e) {
-        _tblPending = true;   // keep the change; a later edit/flush retries
+        _tblDirty.add(id);   // keep this recipe dirty; a later edit/flush retries it
         showUnsavedError('Save failed — ' + (e && e.message ? e.message : e) + '. Your change isn’t lost; keep editing to retry.');
         break;
       }
@@ -1022,7 +1032,7 @@ function initSaveFlush() {
     a.addEventListener('click', async (e) => {
       const href = a.getAttribute('href');
       if (!href || href.startsWith('#')) return;
-      if (!_saveTimer && !_savePending && !_saveDrain) return; // nothing pending
+      if (!anySavePending()) return; // nothing pending (mode-aware: blob or tables)
       e.preventDefault();
       await flushSaves();
       if (document.getElementById('save-error-banner') &&
@@ -1033,7 +1043,7 @@ function initSaveFlush() {
   // Flush when the tab is hidden (switching tabs/apps) and as a last resort on unload.
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushSaves(); });
   window.addEventListener('beforeunload', (e) => {
-    if (_saveTimer || _savePending || _saveDrain) { flushSaves(); e.preventDefault(); e.returnValue = ''; }
+    if (anySavePending()) { flushSaves(); e.preventDefault(); e.returnValue = ''; }
   });
 }
 
@@ -1181,9 +1191,15 @@ setInterval(function () {
     }
   }
 }, 5000);
+// True if there's an unsaved edit in EITHER save path — used by the exit guards
+// (nav-link, beforeunload) so a refresh/navigation in tables mode flushes instead
+// of dropping the save. (The blob-only check here was why tables edits vanished.)
+function anySavePending() {
+  return TABLES_MODE ? tablesSavePending() : (!!_saveTimer || _savePending || !!_saveDrain);
+}
 // Force any pending/in-flight save to finish. Call before leaving the page.
 async function flushSaves() {
-  if (TABLES_MODE) { clearTimeout(_tblTimer); _tblTimer = null; if (_tblPending || _tblSaving) await drainTablesSave(); return; }
+  if (TABLES_MODE) { clearTimeout(_tblTimer); _tblTimer = null; if (_tblDirty.size || _tblSaving) await drainTablesSave(); return; }
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   if (_savePending || _saveDrain) await startSaveDrain();
 }
@@ -1357,8 +1373,8 @@ function newRecipe() {
     createdAt: Date.now()
   };
   recipes.unshift(r);
+  currentRecipeId = r.id;   // set BEFORE saveRecipes so the tables save targets THIS new recipe
   saveRecipes();
-  currentRecipeId = r.id;
   renderSidebar();
   renderBuilder(r);
   updateSubtitle();
@@ -2442,9 +2458,13 @@ function duplicateRecipe(id) {
   copy.id = crypto.randomUUID();
   copy.name = (r.name || 'Untitled') + ' (copy)';
   copy.createdAt = Date.now();
+  delete copy._version;   // a brand-new row starts fresh, not at the original's version
+  // Regenerate line ids — reusing the originals would collide on the cocktail_ingredients PK.
+  (copy.ingredients || []).forEach(l => { l.id = crypto.randomUUID(); });
+  (copy.bpIngredients || []).forEach(l => { if (l.id) l.id = crypto.randomUUID(); });
   recipes.unshift(copy);
+  currentRecipeId = copy.id;   // set BEFORE saveRecipes so the tables save targets the copy
   saveRecipes();
-  currentRecipeId = copy.id;
   renderSidebar();
   renderBuilder(copy);
   showToast('Recipe duplicated');
