@@ -520,7 +520,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 13;
+const APP_BUILD = 14;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -866,17 +866,18 @@ function rowToRecipe(c, lines) {
     _version: c.version                 // carried for the Phase 2 per-cocktail save guard
   };
   if (c.batch_qty != null) r.batchQty = Number(c.batch_qty);
+  // Bar-prep components and cocktail ingredients share the SAME line shape, so both
+  // rebuild r.ingredients identically (this is what the Components UI reads and edits).
+  r.ingredients = lines.map(l => ({
+    id: l.id, qty: qtyOf(l), unit: l.unit || 'oz',
+    ingredientId: l.ingredient_id || l.prep_id || null,
+    ingredientName: l.ingredient_name || '',
+    pourStyle: l.pour_style || null
+  }));
   if (r.recipeType === 'barprep') {
-    r.bpIngredients = lines.map(l => ({ qty: qtyOf(l), unit: l.unit || '', name: l.ingredient_name || '' }));
     r.bpSteps = (Array.isArray(c.steps) && c.steps.length) ? c.steps : ((c.legacy && Array.isArray(c.legacy.bpSteps)) ? c.legacy.bpSteps : []);
-    r.ingredients = [];
-  } else {
-    r.ingredients = lines.map(l => ({
-      id: l.id, qty: qtyOf(l), unit: l.unit || 'oz',
-      ingredientId: l.ingredient_id || l.prep_id || null,
-      ingredientName: l.ingredient_name || '',
-      pourStyle: l.pour_style || null
-    }));
+    // legacy mirror kept in sync so any old bpIngredients reader still works
+    r.bpIngredients = lines.map(l => ({ qty: qtyOf(l), unit: l.unit || '', name: l.ingredient_name || '' }));
   }
   return r;
 }
@@ -907,9 +908,18 @@ function showTablesPreviewBanner(n) {
 // matches (else a conflict prompt, never a silent overwrite). No blob, no
 // single-flight-lock-that-can-wedge.
 function recipeToPayload(r) {
-  var lines = (r.recipeType === 'barprep')
-    ? (r.bpIngredients || []).map(function (l) { return { ref_id: null, ingredient_name: l.name || '', qty: (l.qty != null ? String(l.qty) : ''), unit: l.unit || '', pour_style: null }; })
-    : (r.ingredients || []).map(function (l) { return { id: l.id, ref_id: l.ingredientId || null, ingredient_name: l.ingredientName || '', qty: (l.qty != null ? String(l.qty) : ''), unit: l.unit || 'oz', pour_style: l.pourStyle || null }; });
+  // Bar-prep "components" live in r.ingredients (SAME shape as cocktail ingredients:
+  // id / qty / unit / ingredientId link / ingredientName). r.bpIngredients is only a
+  // legacy fallback for a prep whose data hasn't been lifted into r.ingredients yet —
+  // reading bpIngredients here is what made added components vanish on refresh.
+  var rows = r.ingredients || [];
+  if (r.recipeType === 'barprep' && !bpRowsHaveContent(rows) && Array.isArray(r.bpIngredients) && r.bpIngredients.length) {
+    rows = r.bpIngredients.map(function (l) { return { id: null, ingredientId: null, ingredientName: l.name || '', qty: l.qty, unit: l.unit }; });
+  }
+  var lines = rows.map(function (l) {
+    return { id: l.id, ref_id: l.ingredientId || null, ingredient_name: l.ingredientName || '',
+             qty: (l.qty != null ? String(l.qty) : ''), unit: l.unit || 'oz', pour_style: l.pourStyle || null };
+  });
   return {
     id: r.id, version: (r._version != null ? r._version : null),
     name: r.name || '', recipe_type: r.recipeType || 'cocktail',
