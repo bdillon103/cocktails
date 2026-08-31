@@ -519,7 +519,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 10;
+const APP_BUILD = 11;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -895,9 +895,77 @@ function showTablesPreviewBanner(n) {
   if (document.getElementById('tables-preview-banner')) return;
   const el = document.createElement('div');
   el.id = 'tables-preview-banner';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1f5488;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:9px 16px;text-align:center;z-index:99999;box-shadow:0 -2px 10px rgba(0,0,0,0.2);';
-  el.textContent = '👁 Read-only tables preview — rebuilt ' + n + ' recipes from the new tables. Editing is off here. (Normal editing: drop ?src=tables from the URL.)';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#2d6a4f;color:#fff;font-family:"DM Mono",monospace;font-size:12px;letter-spacing:0.02em;padding:9px 16px;text-align:center;z-index:99998;box-shadow:0 -2px 10px rgba(0,0,0,0.2);';
+  el.textContent = '● TABLES TEST — ' + n + ' recipes from the new per-row tables. Your edits save here, one cocktail at a time; the old blob is untouched. (Normal editor: drop ?src=tables.)';
   document.body.appendChild(el);
+}
+
+// ─── PHASE 2b · SAVE TO TABLES (per-cocktail, version-checked via save_cocktail) ──
+// In tables mode, an edit saves just the CURRENT cocktail through the RPC — its
+// row + its ingredient lines, in one transaction, only if the version still
+// matches (else a conflict prompt, never a silent overwrite). No blob, no
+// single-flight-lock-that-can-wedge.
+function recipeToPayload(r) {
+  var lines = (r.recipeType === 'barprep')
+    ? (r.bpIngredients || []).map(function (l) { return { ref_id: null, ingredient_name: l.name || '', qty: (l.qty != null ? String(l.qty) : ''), unit: l.unit || '', pour_style: null }; })
+    : (r.ingredients || []).map(function (l) { return { id: l.id, ref_id: l.ingredientId || null, ingredient_name: l.ingredientName || '', qty: (l.qty != null ? String(l.qty) : ''), unit: l.unit || 'oz', pour_style: l.pourStyle || null }; });
+  return {
+    id: r.id, version: (r._version != null ? r._version : null),
+    name: r.name || '', recipe_type: r.recipeType || 'cocktail',
+    bartender: r.bartender || '', glass: r.glass || '', ice: r.ice || '', style: r.style || '',
+    garnish: r.garnish || '', method_notes: r.methodNotes || '', menu_description: r.summary || '',
+    menu_price: (r.menuPrice != null ? r.menuPrice : null), family: r.family || '',
+    flavor: Array.isArray(r.flavor) ? r.flavor : [],
+    is_house_prep: !!r.isHousePrep, prep_yield: r.bpYield || '', dilute: !!r.dilute,
+    batch_qty: (r.batchQty != null ? r.batchQty : null),
+    lines: lines
+  };
+}
+let _tblTimer = null, _tblSaving = false, _tblPending = false;
+function scheduleTablesSave() {
+  _tblPending = true;
+  clearTimeout(_tblTimer);
+  _tblTimer = setTimeout(drainTablesSave, SAVE_DEBOUNCE_MS);
+}
+async function drainTablesSave() {
+  clearTimeout(_tblTimer); _tblTimer = null;
+  if (_tblSaving) return;
+  _tblSaving = true;
+  try {
+    while (_tblPending) {
+      _tblPending = false;
+      const r = currentRecipe();
+      if (!r) break;
+      if (r.recipeType === 'barprep') {   // steps aren't in the tables yet — keep read-only so none are lost
+        showUnsavedError('Bar-prep editing via the tables is coming next — this one is read-only for now (cocktails save fine).');
+        continue;
+      }
+      try {
+        const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) });
+        const out = Array.isArray(res) ? res[0] : res;
+        if (out && out.ok) { r._version = out.version; hideUnsavedError(); showToast('✓ Saved'); }
+        else if (out && out.conflict) { showConflictBanner(out.current_version); }
+        else { throw new Error('unexpected save response'); }
+      } catch (e) {
+        _tblPending = true;   // keep the change; a later edit/flush retries
+        showUnsavedError('Save failed — ' + (e && e.message ? e.message : e) + '. Your change isn’t lost; keep editing to retry.');
+        break;
+      }
+    }
+  } finally { _tblSaving = false; }
+}
+function showConflictBanner(currentVersion) {
+  let el = document.getElementById('save-error-banner');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'save-error-banner';
+    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#a9770a;color:#fff;font-family:"DM Mono",monospace;font-size:12px;padding:10px 16px;text-align:center;z-index:99999;';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '⚠ This recipe was changed on another device (now v' + currentVersion + '). '
+    + '<button onclick="location.reload()" style="margin-left:10px;background:#fff;color:#a9770a;border:none;border-radius:4px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">Reload latest</button>';
+}
+async function deleteCocktailFromTables(id) {
+  await sbRequest('DELETE', '/rest/v1/cocktails?id=eq.' + id);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -1077,7 +1145,7 @@ let _drainGen = 0;      // generation of the active drain — lets the watchdog 
 let _drainAt = 0;       // when the active drain started (ms), for the stuck-save watchdog
 const SAVE_DEBOUNCE_MS = 450;
 function saveRecipes() {          // debounced entry point (keeps all 32 callers working)
-  if (TABLES_MODE) return;        // read-only tables preview — never write to the blob here
+  if (TABLES_MODE) { scheduleTablesSave(); return; }   // tables mode: save the current cocktail per-row
   _savePending = true;
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => { startSaveDrain(); }, SAVE_DEBOUNCE_MS);
@@ -1118,6 +1186,7 @@ setInterval(function () {
 }, 5000);
 // Force any pending/in-flight save to finish. Call before leaving the page.
 async function flushSaves() {
+  if (TABLES_MODE) { clearTimeout(_tblTimer); _tblTimer = null; if (_tblPending || _tblSaving) await drainTablesSave(); return; }
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   if (_savePending || _saveDrain) await startSaveDrain();
 }
@@ -2393,9 +2462,10 @@ function openDeleteModal(id) {
 }
 
 function confirmDeleteRecipe() {
+  if (TABLES_MODE) { deleteCocktailFromTables(deletingId).catch(function(e){ showUnsavedError('Delete failed — ' + (e && e.message ? e.message : e)); }); }
   deletedRecipeIds.add(deletingId);
   recipes = recipes.filter(r => r.id !== deletingId);
-  saveRecipes();
+  if (!TABLES_MODE) saveRecipes();
   currentRecipeId = null;
   closeModal('delete-modal');
   renderSidebar();
