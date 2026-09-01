@@ -311,6 +311,44 @@ function requireAuth() {
 }
 
 // ─── DATA LAYER ───────────────────────────────────────────────────────────────
+// ─── Phase 3: read recipes from the relational tables (DEFAULT; ?src=blob falls back) ──
+const TABLES_MODE = new URLSearchParams(location.search).get('src') !== 'blob';
+function rowToRecipe(c, lines) {
+  const qtyOf = l => (l.amount_raw != null ? l.amount_raw : (l.amount != null ? String(l.amount) : ''));
+  const r = {
+    id: c.id, name: c.name || '', recipeType: c.recipe_type || 'cocktail',
+    bartender: c.bartender || '', glass: c.glass || '', ice: c.ice || '', style: c.style || '',
+    garnish: c.garnish || '', methodNotes: c.method_notes || '', summary: c.menu_description || '',
+    menuPrice: c.menu_price != null ? Number(c.menu_price) : null,
+    family: c.family || '', flavor: Array.isArray(c.flavor) ? c.flavor : [],
+    dilute: !!c.dilute, isHousePrep: !!c.is_house_prep, bpYield: c.prep_yield || '',
+    createdAt: c.created_at ? Date.parse(c.created_at) : undefined,
+    _version: c.version
+  };
+  if (c.batch_qty != null) r.batchQty = Number(c.batch_qty);
+  r.ingredients = lines.map(l => ({
+    id: l.id, qty: qtyOf(l), unit: l.unit || 'oz',
+    ingredientId: l.ingredient_id || l.prep_id || null,
+    ingredientName: l.ingredient_name || '',
+    pourStyle: l.pour_style || null
+  }));
+  if (r.recipeType === 'barprep') {
+    r.bpSteps = (Array.isArray(c.steps) && c.steps.length) ? c.steps : ((c.legacy && Array.isArray(c.legacy.bpSteps)) ? c.legacy.bpSteps : []);
+    r.bpIngredients = lines.map(l => ({ qty: qtyOf(l), unit: l.unit || '', name: l.ingredient_name || '' }));
+  }
+  return r;
+}
+async function loadRecipesFromTables() {
+  const cocktails = await sbRequest('GET', '/rest/v1/cocktails?select=*') || [];
+  const lines     = await sbRequest('GET', '/rest/v1/cocktail_ingredients?select=*') || [];
+  const byCocktail = new Map();
+  lines.forEach(l => { if (!byCocktail.has(l.cocktail_id)) byCocktail.set(l.cocktail_id, []); byCocktail.get(l.cocktail_id).push(l); });
+  return cocktails.map(c => {
+    const ls = (byCocktail.get(c.id) || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    return rowToRecipe(c, ls);
+  });
+}
+
 async function loadAppData() {
   // Try Supabase first
   try {
@@ -334,7 +372,7 @@ async function loadAppData() {
 // NB: the Menu Grid is read-only — it never writes the blob — but it keeps the
 // same hardened data layer as the other pages for consistency.
 const PAGE_ID = 'grid';
-const APP_BUILD = 16;
+const APP_BUILD = 17;
 let appIsStale = false;
 function currentUserEmail() {
   try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
@@ -486,7 +524,7 @@ window.addEventListener('DOMContentLoaded', async function() {
     var appData = await loadAppData();
     spirits = appData.spirits || [];
     otherIngredients = appData.otherIngredients || [];
-    var allRecipes = appData.recipes || [];
+    var allRecipes = TABLES_MODE ? await loadRecipesFromTables() : (appData.recipes || []);
     var allMenus = appData.menus || [];
     var activeMenu = allMenus.filter(function(m){return m.isActive;})[0] || allMenus[0] || null;
     if (activeMenu) {

@@ -500,6 +500,44 @@ function requireAuth() {
 }
 
 // ─── DATA LAYER ───────────────────────────────────────────────────────────────
+// ─── Phase 3: read recipes from the relational tables (DEFAULT; ?src=blob falls back) ──
+const TABLES_MODE = new URLSearchParams(location.search).get('src') !== 'blob';
+function rowToRecipe(c, lines) {
+  const qtyOf = l => (l.amount_raw != null ? l.amount_raw : (l.amount != null ? String(l.amount) : ''));
+  const r = {
+    id: c.id, name: c.name || '', recipeType: c.recipe_type || 'cocktail',
+    bartender: c.bartender || '', glass: c.glass || '', ice: c.ice || '', style: c.style || '',
+    garnish: c.garnish || '', methodNotes: c.method_notes || '', summary: c.menu_description || '',
+    menuPrice: c.menu_price != null ? Number(c.menu_price) : null,
+    family: c.family || '', flavor: Array.isArray(c.flavor) ? c.flavor : [],
+    dilute: !!c.dilute, isHousePrep: !!c.is_house_prep, bpYield: c.prep_yield || '',
+    createdAt: c.created_at ? Date.parse(c.created_at) : undefined,
+    _version: c.version
+  };
+  if (c.batch_qty != null) r.batchQty = Number(c.batch_qty);
+  r.ingredients = lines.map(l => ({
+    id: l.id, qty: qtyOf(l), unit: l.unit || 'oz',
+    ingredientId: l.ingredient_id || l.prep_id || null,
+    ingredientName: l.ingredient_name || '',
+    pourStyle: l.pour_style || null
+  }));
+  if (r.recipeType === 'barprep') {
+    r.bpSteps = (Array.isArray(c.steps) && c.steps.length) ? c.steps : ((c.legacy && Array.isArray(c.legacy.bpSteps)) ? c.legacy.bpSteps : []);
+    r.bpIngredients = lines.map(l => ({ qty: qtyOf(l), unit: l.unit || '', name: l.ingredient_name || '' }));
+  }
+  return r;
+}
+async function loadRecipesFromTables() {
+  const cocktails = await sbRequest('GET', '/rest/v1/cocktails?select=*') || [];
+  const lines     = await sbRequest('GET', '/rest/v1/cocktail_ingredients?select=*') || [];
+  const byCocktail = new Map();
+  lines.forEach(l => { if (!byCocktail.has(l.cocktail_id)) byCocktail.set(l.cocktail_id, []); byCocktail.get(l.cocktail_id).push(l); });
+  return cocktails.map(c => {
+    const ls = (byCocktail.get(c.id) || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    return rowToRecipe(c, ls);
+  });
+}
+
 async function loadAppData() {
   // Try Supabase first
   try {
@@ -523,7 +561,7 @@ async function loadAppData() {
 const PAGE_ID = 'menus';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 16;
+const APP_BUILD = 17;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -760,7 +798,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 async function loadManager() {
   const data = await loadAppData();
   menus = data.menus || [];
-  recipes = data.recipes || [];
+  recipes = TABLES_MODE ? await loadRecipesFromTables() : (data.recipes || []);
   spirits = data.spirits || [];
   otherIngredients = data.otherIngredients || [];
   menuSnapshots = new Map(menus.map(m => [m.id, JSON.stringify(m)]));

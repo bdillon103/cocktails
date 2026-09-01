@@ -527,7 +527,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 16;
+const APP_BUILD = 17;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -858,7 +858,9 @@ function unitOptionsHTML(currentUnit) {
 // tables instead of the JSON blob, to prove the migration reconstructs every
 // recipe. Saving is DISABLED in this mode; staff use the normal URL and are
 // unaffected. Once this is confirmed on real data, the write path follows.
-const TABLES_MODE = new URLSearchParams(location.search).get('src') === 'tables';
+// Relational tables are now the DEFAULT store. ?src=blob is the emergency escape
+// hatch back to the legacy JSON blob (kept as an untouched backup).
+const TABLES_MODE = new URLSearchParams(location.search).get('src') !== 'blob';
 
 function rowToRecipe(c, lines) {
   const qtyOf = l => (l.amount_raw != null ? l.amount_raw : (l.amount != null ? String(l.amount) : ''));
@@ -1131,10 +1133,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (TABLES_MODE) {
     try {
       recipes = await loadRecipesFromTables();
-      showTablesPreviewBanner(recipes.length);
     } catch (e) {
       recipes = appData2.recipes || [];
-      alert('Tables preview failed to load: ' + (e && e.message ? e.message : e) + '\nShowing the current (blob) data instead.');
+      alert('Could not load recipes from the database: ' + (e && e.message ? e.message : e) + '\nShowing the last-known (backup) data. Add ?src=blob to the URL to work off the backup safely.');
     }
   } else {
     recipes = appData2.recipes || [];
