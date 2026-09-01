@@ -193,6 +193,13 @@
 
   .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
   .section-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+
+  /* SAVE STATUS PILL (tables mode) */
+  .save-status { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 4px; white-space: nowrap; transition: color 0.15s; }
+  .ss-saved   { color: var(--green); }
+  .ss-saving  { color: var(--ink-light); }
+  .ss-unsaved { color: var(--gold); }
+  .ss-error   { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -520,7 +527,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 15;
+const APP_BUILD = 16;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -938,12 +945,28 @@ function recipeToPayload(r) {
 // at drain time silently dropped edits whenever you switched recipes (or created a
 // new one) within the 450ms window. The dirty-set makes each edit save the recipe
 // it actually belongs to, and survive recipe-switching.
-let _tblTimer = null, _tblSaving = false, _tblDrainPromise = null, _suppressDrainToast = false;
+let _tblTimer = null, _tblSaving = false, _tblDrainPromise = null;
 const _tblDirty = new Set();
 function tablesSavePending() { return !!_tblTimer || _tblSaving || _tblDirty.size > 0; }
+// The always-visible save-status pill (tables mode). Replaces the old per-keystroke
+// "✓ Saved" toast so that toast now only appears when you deliberately click Save.
+function setSaveStatus(state) {
+  const el = document.getElementById('save-status');
+  if (!el) return;
+  const map = {
+    saving:  { t: 'Saving…',             c: 'ss-saving' },
+    saved:   { t: '✓ All changes saved',  c: 'ss-saved' },
+    unsaved: { t: '● Unsaved changes',    c: 'ss-unsaved' },
+    error:   { t: '⚠ Not saved',          c: 'ss-error' }
+  };
+  const s = map[state] || map.saved;
+  el.className = 'save-status ' + s.c;
+  el.textContent = s.t;
+}
 function scheduleTablesSave() {
   const r = currentRecipe();
   if (r && r.id) _tblDirty.add(r.id);   // capture the edited recipe NOW
+  setSaveStatus('unsaved');
   clearTimeout(_tblTimer);
   _tblTimer = setTimeout(drainTablesSave, SAVE_DEBOUNCE_MS);
 }
@@ -952,6 +975,8 @@ function drainTablesSave() {
   if (_tblSaving) return _tblDrainPromise;   // already draining — hand back that promise so callers can await it
   _tblSaving = true;
   _tblDrainPromise = (async () => {
+    setSaveStatus('saving');
+    let problem = false;
     try {
       while (_tblDirty.size) {
         const id = _tblDirty.values().next().value;
@@ -961,15 +986,18 @@ function drainTablesSave() {
         try {
           const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) }, { keepalive: true });
           const out = Array.isArray(res) ? res[0] : res;
-          if (out && out.ok) { r._version = out.version; hideUnsavedError(); if (!_suppressDrainToast) showToast('✓ Saved'); }
-          else if (out && out.conflict) { showConflictBanner(out.current_version); }   // needs a reload, not a retry
+          if (out && out.ok) { r._version = out.version; hideUnsavedError(); }   // success now shows in the status pill, not a toast
+          else if (out && out.conflict) { problem = true; setSaveStatus('error'); showConflictBanner(out.current_version); }   // needs a reload, not a retry
           else { throw new Error('unexpected save response'); }
         } catch (e) {
+          problem = true;
           _tblDirty.add(id);   // keep this recipe dirty; a later edit/flush retries it
+          setSaveStatus('error');
           showUnsavedError('Save failed — ' + (e && e.message ? e.message : e) + '. Your change isn’t lost; keep editing to retry.');
           break;
         }
       }
+      if (!problem && _tblDirty.size === 0) setSaveStatus('saved');
     } finally { _tblSaving = false; }
   })();
   return _tblDrainPromise;
@@ -983,6 +1011,85 @@ async function reloadRecipeFromTables(id) {
   const lines = await sbRequest('GET', '/rest/v1/cocktail_ingredients?cocktail_id=eq.' + id + '&select=*') || [];
   lines.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   return rowToRecipe(rows[0], lines);
+}
+
+// ─── PRE-FLIP SELF-CHECK ────────────────────────────────────────────────────────
+// Round-trips every loaded recipe through save→read and flags any field, component,
+// step, or link that doesn't survive. Run in the console (?src=tables):
+//   checkTablesRoundTrip()            → DRY-RUN, no DB writes (catches client mapping bugs)
+//   checkTablesRoundTrip({live:true}) → actually save+reload all from the DB (writes!)
+// Report is also left on window.__rtReport.
+function _rtCocktailRow(p, version) {
+  return { id: p.id, name: p.name, recipe_type: p.recipe_type, bartender: p.bartender,
+    glass: p.glass, ice: p.ice, style: p.style, garnish: p.garnish, method_notes: p.method_notes,
+    menu_description: p.menu_description, menu_price: p.menu_price, family: p.family,
+    flavor: p.flavor, is_house_prep: p.is_house_prep, prep_yield: p.prep_yield, dilute: p.dilute,
+    batch_qty: p.batch_qty, steps: p.steps, version: version || 1 };
+}
+function _rtLineRows(p) {
+  const num = /^[0-9]*\.?[0-9]+$/;
+  return (p.lines || []).map((l, i) => ({
+    id: l.id, sort_order: i, ingredient_id: l.ref_id || null, prep_id: null,
+    ingredient_name: l.ingredient_name,
+    amount: (l.qty != null && num.test(l.qty)) ? Number(l.qty) : null,
+    amount_raw: (l.qty != null && l.qty !== '') ? String(l.qty) : null,
+    unit: l.unit, pour_style: l.pour_style
+  }));
+}
+function _rtDiff(a, b) {
+  const diffs = [];
+  const s = x => (x == null ? '' : String(x));
+  const nz = x => (x == null || x === '' ? null : x);
+  ['name','recipeType','bartender','glass','ice','style','garnish','methodNotes','summary','family','bpYield']
+    .forEach(f => { if (s(a[f]) !== s(b[f])) diffs.push({ field:f, want:a[f], got:b[f] }); });
+  if ((a.menuPrice == null ? null : Number(a.menuPrice)) !== (b.menuPrice == null ? null : Number(b.menuPrice))) diffs.push({ field:'menuPrice', want:a.menuPrice, got:b.menuPrice });
+  if (!!a.isHousePrep !== !!b.isHousePrep) diffs.push({ field:'isHousePrep', want:a.isHousePrep, got:b.isHousePrep });
+  if (!!a.dilute !== !!b.dilute) diffs.push({ field:'dilute', want:a.dilute, got:b.dilute });
+  if (JSON.stringify(a.flavor||[]) !== JSON.stringify(b.flavor||[])) diffs.push({ field:'flavor', want:a.flavor, got:b.flavor });
+  if ((a.batchQty == null ? null : Number(a.batchQty)) !== (b.batchQty == null ? null : Number(b.batchQty))) diffs.push({ field:'batchQty', want:a.batchQty, got:b.batchQty });
+  if (a.recipeType === 'barprep' && JSON.stringify(a.bpSteps||[]) !== JSON.stringify(b.bpSteps||[])) diffs.push({ field:'bpSteps', want:a.bpSteps, got:b.bpSteps });
+  const ai = a.ingredients || [], bi = b.ingredients || [];
+  if (ai.length !== bi.length) diffs.push({ field:'ingredients.length', want:ai.length, got:bi.length });
+  for (let i = 0; i < Math.min(ai.length, bi.length); i++) {
+    const x = ai[i], y = bi[i];
+    if (s(x.ingredientName) !== s(y.ingredientName)) diffs.push({ field:`ing[${i}].name`, want:x.ingredientName, got:y.ingredientName });
+    if (s(x.qty) !== s(y.qty)) diffs.push({ field:`ing[${i}].qty`, want:x.qty, got:y.qty });
+    if (s(x.unit||'oz') !== s(y.unit||'oz')) diffs.push({ field:`ing[${i}].unit`, want:x.unit, got:y.unit });
+    if (nz(x.ingredientId) !== nz(y.ingredientId)) diffs.push({ field:`ing[${i}].link`, want:x.ingredientId, got:y.ingredientId });
+    if (nz(x.pourStyle) !== nz(y.pourStyle)) diffs.push({ field:`ing[${i}].pourStyle`, want:x.pourStyle, got:y.pourStyle });
+  }
+  return diffs;
+}
+async function checkTablesRoundTrip(opts) {
+  opts = opts || {};
+  const live = !!opts.live;
+  if (!TABLES_MODE) { console.warn('[round-trip] Open the page with ?src=tables first.'); return; }
+  const report = { mode: live ? 'LIVE' : 'DRY-RUN', total: recipes.length, clean: 0, issues: [] };
+  console.log(`[round-trip] ${report.mode} — checking ${report.total} recipes…`);
+  for (const r of recipes) {
+    let back = null;
+    try {
+      if (live) {
+        const res = await sbRequest('POST', '/rest/v1/rpc/save_cocktail', { p: recipeToPayload(r) });
+        const out = Array.isArray(res) ? res[0] : res;
+        if (out && out.conflict) { report.issues.push({ id:r.id, name:r.name, type:r.recipeType, diffs:[{field:'(save)', want:'ok', got:'version conflict'}] }); continue; }
+        back = await reloadRecipeFromTables(r.id);
+      } else {
+        const p = recipeToPayload(r);
+        back = rowToRecipe(_rtCocktailRow(p, r._version), _rtLineRows(p));
+      }
+    } catch (e) {
+      report.issues.push({ id:r.id, name:r.name, type:r.recipeType, diffs:[{field:'(error)', want:'', got:(e && e.message || String(e))}] });
+      continue;
+    }
+    const diffs = back ? _rtDiff(r, back) : [{ field:'(reload)', want:'row', got:'not found' }];
+    if (diffs.length) report.issues.push({ id:r.id, name:r.name, type:r.recipeType, diffs });
+    else report.clean++;
+  }
+  console.log(`[round-trip] ${report.mode}: ${report.clean}/${report.total} clean` + (report.issues.length ? ` · ${report.issues.length} with issues:` : ' · ALL CLEAN ✓'));
+  report.issues.forEach(m => console.log('  ✗', m.type, '·', m.name, '—', m.diffs.map(d => d.field + ': ' + JSON.stringify(d.want) + ' ≠ ' + JSON.stringify(d.got)).join('; ')));
+  window.__rtReport = report;
+  return report;
 }
 function showConflictBanner(currentVersion) {
   let el = document.getElementById('save-error-banner');
@@ -1565,7 +1672,8 @@ function renderBuilder(r) {
   <!-- SAVE BAR -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
     <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${r.id}')"><i class="ti ti-trash"></i> Delete recipe</button>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      ${TABLES_MODE ? '<span id="save-status" class="save-status ss-saved">✓ All changes saved</span>' : ''}
       <button class="btn" onclick="duplicateRecipe('${r.id}')"><i class="ti ti-copy"></i> Duplicate</button>
       <button class="btn btn-primary" onclick="saveCurrentRecipe(this)"><i class="ti ti-device-floppy"></i> Save recipe</button>
     </div>
@@ -2479,7 +2587,6 @@ async function saveCurrentRecipe(btn) {
   if (!r) return;
   const label = btn && btn.innerHTML;
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Saving…'; }
-  _suppressDrainToast = true;   // the button gives ONE explicit confirmation; skip the auto-save toast
   try {
     saveRecipes();          // mark dirty / schedule
     await flushSaves();     // actually wait for the write to land
@@ -2503,7 +2610,6 @@ async function saveCurrentRecipe(btn) {
     renderSidebar();
     showToast(`✓ Saved: ${r.name || 'Untitled'}`);
   } finally {
-    _suppressDrainToast = false;
     if (btn) { btn.disabled = false; btn.innerHTML = label; }
   }
 }
@@ -2893,7 +2999,8 @@ function renderBarPrepBuilder(r) {
     <!-- SAVE BAR -->
     <div style="display:flex;justify-content:space-between;align-items:center;padding-top:1rem;border-top:1px solid var(--border);">
       <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${r.id}')"><i class="ti ti-trash"></i> Delete</button>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${TABLES_MODE ? '<span id="save-status" class="save-status ss-saved">✓ All changes saved</span>' : ''}
         <button class="btn" onclick="duplicateRecipe('${r.id}')"><i class="ti ti-copy"></i> Duplicate</button>
         <button class="btn btn-primary" onclick="saveCurrentRecipe(this)"><i class="ti ti-device-floppy"></i> Save</button>
       </div>
