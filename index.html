@@ -473,6 +473,78 @@
     margin-top: 8px;
   }
 
+  /* PRODUCE & PREP PRICING */
+  .pp-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+  }
+  .pp-bar .pp-hint {
+    flex: 1; min-width: 220px;
+    font-size: 12px; color: var(--ink-light); line-height: 1.5;
+  }
+  .pp-section { margin-bottom: 2rem; }
+  .pp-section-head {
+    display: flex; align-items: baseline; gap: 10px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--ink-mid);
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 1rem;
+  }
+  .pp-section-head .pp-sub { font-size: 11px; color: var(--ink-light); text-transform: none; letter-spacing: 0; }
+  .pp-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+  .pp-card {
+    background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .pp-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .pp-card-name {
+    font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--ink);
+    background: none; border: none; padding: 2px 0; width: 100%; min-width: 0;
+  }
+  .pp-card-name:focus { outline: none; border-bottom: 1px solid var(--border-mid); }
+  .pp-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .pp-field { display: flex; flex-direction: column; gap: 3px; }
+  .pp-field.full { grid-column: 1 / -1; }
+  .pp-field label {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--ink-light);
+  }
+  .pp-field input, .pp-field select {
+    font-family: var(--mono); font-size: 12px; color: var(--ink);
+    background: var(--parchment); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 6px 8px; width: 100%;
+  }
+  .pp-field input:focus, .pp-field select:focus { outline: none; border-color: var(--ink-mid); }
+  .pp-result {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--parchment); border-radius: var(--radius); padding: 8px 12px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-mid);
+  }
+  .pp-result .pp-peroz { font-size: 15px; font-weight: 500; color: var(--green); }
+  .pp-result .pp-batch { color: var(--ink-light); }
+  .pp-linked {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-light);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .pp-linked .pp-arrow { color: var(--accent); }
+  .pp-card-del {
+    background: none; border: none; color: var(--ink-ghost); cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 2px 4px; flex-shrink: 0;
+  }
+  .pp-card-del:hover { color: var(--accent); }
+  .pp-derived {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-mid);
+    background: var(--gold-dim); border-radius: var(--radius); padding: 6px 8px;
+  }
+  .pp-add-btn {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-mid);
+    background: none; border: 1px dashed var(--border-mid); border-radius: var(--radius);
+    padding: 6px 12px; cursor: pointer;
+  }
+  .pp-add-btn:hover { border-color: var(--ink-mid); color: var(--ink); }
+
   /* UPLOAD ZONE */
   .upload-zone {
     border: 1.5px dashed var(--border-mid);
@@ -609,6 +681,9 @@
     <div class="tab" id="tab-other" onclick="switchTab('other')">
       Other Ingredients <span class="tab-count" id="count-other">0</span>
     </div>
+    <div class="tab" id="tab-produce" onclick="switchTab('produce')">
+      Produce &amp; Prep <span class="tab-count" id="count-produce">0</span>
+    </div>
   </div>
 
   <!-- Toolbar -->
@@ -688,6 +763,43 @@
           </tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Produce & Prep pricing panel -->
+  <div id="produce-panel" style="display:none;">
+    <div class="pp-bar">
+      <div class="pp-hint">
+        Price the repeating basics from what you actually pay. Juice yields default to food-science figures — % of fruit weight that becomes juice (lemon 45%, lime 42%, orange 47%, grapefruit 48%, pineapple 35%) × a standard piece weight — all editable. Every change flows straight into the linked ingredient's <strong>cost&nbsp;/&nbsp;oz</strong>, so all recipes reprice instantly.
+      </div>
+      <button class="btn btn-primary" id="pp-save-btn" onclick="saveBasics(true)">Save prices</button>
+    </div>
+
+    <div id="pp-empty" style="display:none;">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="ti ti-lemon-2" style="font-size:32px;opacity:0.3;"></i></div>
+        <div class="empty-title">No basics priced yet</div>
+        <div class="empty-sub">Set up the standard Hamlet &amp; Ghost juices, syrups, and infusions with starter numbers you can adjust.</div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="seedBasics()">Set up standard basics</button>
+      </div>
+    </div>
+
+    <div id="pp-content" style="display:none;">
+      <div class="pp-section">
+        <div class="pp-section-head">Fresh Juice &amp; Produce <span class="pp-sub">case / piece / pound cost × yield</span></div>
+        <div class="pp-grid" id="pp-produce-cards"></div>
+        <button class="pp-add-btn" style="margin-top:12px;" onclick="addBasic('produce')">+ Add juice / produce</button>
+      </div>
+      <div class="pp-section">
+        <div class="pp-section-head">Syrups <span class="pp-sub">sweetener $/lb × ratio + flavoring, ÷ yield</span></div>
+        <div class="pp-grid" id="pp-syrup-cards"></div>
+        <button class="pp-add-btn" style="margin-top:12px;" onclick="addBasic('syrup')">+ Add syrup</button>
+      </div>
+      <div class="pp-section">
+        <div class="pp-section-head">Infusions <span class="pp-sub">linked base liquid + flavoring ÷ yield · also saline / citric / brine</span></div>
+        <div class="pp-grid" id="pp-infusion-cards"></div>
+        <button class="pp-add-btn" style="margin-top:12px;" onclick="addBasic('infusion')">+ Add infusion / solution</button>
+      </div>
     </div>
   </div>
 </main>
@@ -1033,7 +1145,7 @@ async function loadAppData() {
 const PAGE_ID = 'ingredients';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 17;
+const APP_BUILD = 18;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -1430,6 +1542,8 @@ function updateSubtitle() {
     : `${total} ingredients · ${unpriced} unpriced`;
   document.getElementById('count-spirits').textContent = spirits.length;
   document.getElementById('count-other').textContent = otherIngredients.length;
+  var pc = document.getElementById('count-produce');
+  if (pc) pc.textContent = otherIngredients.filter(function(o){ return o.pricing; }).length;
 }
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
@@ -1440,12 +1554,18 @@ function showNav(el) {
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 function switchTab(tab) {
+  // Leaving the pricing tab: flush any pending price edits so nothing is lost.
+  if (currentTab === 'produce' && tab !== 'produce') saveBasics();
   currentTab = tab;
   document.getElementById('tab-spirits').classList.toggle('active', tab === 'spirits');
   document.getElementById('tab-other').classList.toggle('active', tab === 'other');
+  document.getElementById('tab-produce').classList.toggle('active', tab === 'produce');
   document.getElementById('spirits-panel').style.display = tab === 'spirits' ? 'block' : 'none';
   document.getElementById('other-panel').style.display = tab === 'other' ? 'block' : 'none';
+  document.getElementById('produce-panel').style.display = tab === 'produce' ? 'block' : 'none';
   if (tab === 'spirits') filterTable();
+  if (tab === 'other') renderOtherTable();
+  if (tab === 'produce') renderProduceTab();
 }
 
 // ─── IMPORT ───────────────────────────────────────────────────────────────────
@@ -2077,6 +2197,385 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRODUCE & PREP PRICING
+// Prices the repeating house basics (juices, syrups, infusions) from real
+// purchasing economics and writes the result straight onto the linked
+// `otherIngredient` record's cost / sizeOz / costPerOz. Recipes cost themselves
+// off costPerOz (by id), so a price change here reprices every recipe instantly.
+// Calculator inputs live in `ing.pricing` on the same record; derived numbers
+// go in cost/sizeOz/costPerOz. Persisted through the normal snapshot-dirty save.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Conversion constants (food-science, not bartender-blog):
+var OZ_PER_LB_LIQUID = 15.34;      // fl oz of water per lb (453.6 g → 453.6 mL → 15.34 fl oz)
+var SUGAR_VOL_OZ_PER_LB = 9.65;    // fl oz that 1 lb dissolved sugar adds to volume (density 1.59 g/mL)
+var G_PER_LB = 453.592;
+
+// Standardized juice yields from food-science studies: % of the fruit's weight
+// that becomes juice, paired with a standard average piece weight (grams).
+// oz/piece = weight_g × pct/100 ÷ 29.57. All editable per item. Egg white is
+// modeled as ~100% of the white's weight; ginger's % applies to the pound.
+var YIELD = {
+  lemon:     { pct:45, g:100 },   // ~1.52 oz/piece (165ct medium)
+  lime:      { pct:42, g:67  },   // ~0.95 oz
+  orange:    { pct:47, g:180 },   // ~2.86 oz (juice orange)
+  grapefruit:{ pct:48, g:350 },   // ~5.68 oz
+  pineapple: { pct:35, g:1360 },  // ~16.1 oz (whole fruit, ~3 lb)
+  ginger:    { pct:55 },          // ~8.4 oz/lb through a masticating juicer
+  egg:       { pct:100, g:33 }    // ~1.12 oz white per large egg
+};
+
+var _basicsSaveTimer = null;
+function ppNum(v){ v = parseFloat(v); return isNaN(v) ? 0 : v; }
+function r2(n){ return Math.round(n*100)/100; }
+function r3(n){ return Math.round(n*1000)/1000; }
+function ppEsc(s){ return String(s == null ? '' : s).replace(/"/g,'&quot;'); }
+function ppNormName(s){ return String(s||'').toLowerCase().trim().replace(/\s+/g,' '); }
+
+// ─── COMPUTE (pure) ──────────────────────────────────────────────────────────
+// Juice yield is grounded in the documented food-science figures: a % of the
+// fruit's weight becomes juice. For count/each buying we turn that into oz per
+// piece via a standard average piece weight; for weight buying (ginger) the %
+// applies straight to the pound. Both the % and the weight are editable. A
+// legacy `yield` (oz per unit) is honored as a direct override if no % is set.
+function produceOzPerUnit(p){
+  if (p.yieldPct != null && p.yieldPct !== '') {
+    if (p.buy === 'weight') return OZ_PER_LB_LIQUID * ppNum(p.yieldPct) / 100;         // oz juice per lb
+    return ppNum(p.avgWeightG) * (ppNum(p.yieldPct) / 100) / 29.5735;                  // oz juice per piece
+  }
+  return ppNum(p.yield); // legacy / direct override
+}
+function computeProduce(p){
+  var oz = produceOzPerUnit(p);                 // oz of juice per piece (or per lb)
+  var unitLabel = (p.buy === 'weight') ? 'lb' : 'piece';
+  var unitCost, batchOz, batchCost;
+  if (p.buy === 'weight') {
+    unitCost = ppNum(p.lbPrice); batchOz = oz; batchCost = unitCost;
+  } else if (p.buy === 'each') {
+    unitCost = ppNum(p.eachPrice); batchOz = oz; batchCost = unitCost;
+  } else { // count case
+    var cnt = ppNum(p.packCount);
+    unitCost = cnt > 0 ? ppNum(p.packPrice) / cnt : 0;
+    batchOz = cnt * oz; batchCost = ppNum(p.packPrice);
+  }
+  var perOz = oz > 0 ? unitCost / oz : 0;
+  var yldTxt = (p.yieldPct != null && p.yieldPct !== '')
+    ? (ppNum(p.yieldPct) + '% yield · ' + (Math.round(oz*100)/100) + ' oz/' + unitLabel)
+    : ((Math.round(oz*100)/100) + ' oz/' + unitLabel);
+  var note = '$' + unitCost.toFixed(2) + '/' + unitLabel + ' · ' + yldTxt;
+  return { perOz: perOz, batchCost: batchCost, batchOz: batchOz, ozPerUnit: oz, unitLabel: unitLabel, note: note };
+}
+function computeSyrup(p, lookup){
+  var perLb = ppNum(p.bagLb) > 0 ? ppNum(p.bagPrice)/ppNum(p.bagLb) : 0;
+  var sugarLb = ppNum(p.sugarLb);
+  var ratio = ppNum(p.ratio);                       // parts sweetener : 1 part liquid (by weight)
+  var liquidLb = ratio > 0 ? sugarLb / ratio : 0;
+  var liquidVolOz = liquidLb * OZ_PER_LB_LIQUID;
+  var sugarCost = sugarLb * perLb;
+  var liquidCost = 0, liquidName = 'water';
+  if (p.liquidId) {
+    var lk = lookup(p.liquidId);
+    if (lk) { liquidName = lk.name; if (lk.costPerOz) liquidCost = liquidVolOz * lk.costPerOz; }
+  }
+  var addon = ppNum(p.addonCost);
+  var estYield = sugarLb * SUGAR_VOL_OZ_PER_LB + liquidVolOz;
+  var batchOz = ppNum(p.yieldOverride) > 0 ? ppNum(p.yieldOverride) : estYield;
+  var batchCost = sugarCost + liquidCost + addon;
+  var perOz = batchOz > 0 ? batchCost / batchOz : 0;
+  return { perOz: perOz, batchCost: batchCost, batchOz: batchOz, estYield: estYield,
+           note: 'batch $' + batchCost.toFixed(2) + ' / ' + (Math.round(batchOz*10)/10) + ' oz · liquid: ' + liquidName };
+}
+// An infusion steeps a flavoring/solute into a base liquid. The base can be
+// water (free), a linked Spirits-library bottle (Raisin Gin → the gin's real
+// $/oz), or another other-ingredient. Yield ≈ the base volume in, minus any
+// loss. Cost = base volume × base $/oz + weighed agent (g × $/lb) + flat extras.
+// A "solution" (saline/citric/brine) is just an infusion with a water base.
+function infusionBase(p){
+  if (!p.baseRef || p.baseRef === 'water') return { costPerOz: 0, name: 'water' };
+  var list = (p.baseKind === 'spirit') ? spirits : otherIngredients;
+  var b = list.find(function(x){ return x.id === p.baseRef; });
+  if (!b) return { costPerOz: 0, name: '— missing —' };
+  return { costPerOz: ppNum(b.costPerOz), name: (b.brand ? b.brand + ' ' : '') + (b.name || '') };
+}
+function computeInfusion(p){
+  var base = infusionBase(p);
+  var baseVol = ppNum(p.baseVolOz);
+  var baseCost = baseVol * base.costPerOz;
+  var agentCost = (ppNum(p.agentPerLb) > 0 && ppNum(p.agentGrams) > 0)
+    ? (ppNum(p.agentGrams) / G_PER_LB) * ppNum(p.agentPerLb) : 0;
+  var otherCost = ppNum(p.otherCost);
+  var batchCost = baseCost + agentCost + otherCost;
+  var batchOz = ppNum(p.yieldOverride) > 0 ? ppNum(p.yieldOverride) : baseVol;
+  var perOz = batchOz > 0 ? batchCost / batchOz : 0;
+  return { perOz: perOz, batchCost: batchCost, batchOz: batchOz, estYield: baseVol,
+           baseName: base.name,
+           note: 'base: ' + base.name + ' · batch $' + batchCost.toFixed(2) + ' / ' + (Math.round(batchOz*10)/10) + ' oz' };
+}
+// Legacy solution pricing block → infusion (water base + dry agent).
+function migrateInfusion(p){
+  if (p.method !== 'solution') return p;
+  return { method:'infusion', baseRef:'water', baseKind:'water', baseVolOz: ppNum(p.yieldOz),
+    agentGrams: ppNum(p.soluteGrams), agentPerLb: ppNum(p.solutePerLb),
+    otherCost: ppNum(p.extraCost), otherNote: p.soluteName || '', yieldOverride: ppNum(p.yieldOz) };
+}
+function computeBasic(ing, lookup){
+  var p = ing.pricing;
+  if (p.method === 'syrup') return computeSyrup(p, lookup);
+  if (p.method === 'infusion') return computeInfusion(p);
+  if (p.method === 'solution') return computeInfusion(migrateInfusion(p));
+  return computeProduce(p);
+}
+
+// Recompute EVERY priced item and write cost/sizeOz/costPerOz back onto the
+// record. Produce first (no dependencies), then syrups and infusions (which may
+// reference a juice's freshly-computed costPerOz as their liquid/base).
+function recomputeBasics(){
+  var lookup = function(id){ return otherIngredients.find(function(o){ return o.id === id; }); };
+  var priced = otherIngredients.filter(function(o){ return o.pricing; });
+  priced.forEach(function(o){ if (o.pricing.method === 'solution') o.pricing = migrateInfusion(o.pricing); });
+  var apply = function(ing){
+    var c = computeBasic(ing, lookup);
+    ing.cost = r2(c.batchCost);
+    ing.sizeOz = Math.round(c.batchOz * 10) / 10;
+    ing.costPerOz = r3(c.perOz);
+    return c;
+  };
+  var m = function(o){ return o.pricing.method || 'produce'; };
+  priced.filter(function(o){ return m(o) === 'produce'; }).forEach(apply);
+  priced.filter(function(o){ return m(o) === 'syrup'; }).forEach(apply);
+  priced.filter(function(o){ return m(o) === 'infusion'; }).forEach(apply);
+}
+
+// ─── RENDER ────────────────────────────────────────────────────────────────
+function renderProduceTab(){
+  recomputeBasics();
+  var priced = otherIngredients.filter(function(o){ return o.pricing; });
+  document.getElementById('pp-empty').style.display = priced.length ? 'none' : 'block';
+  document.getElementById('pp-content').style.display = priced.length ? 'block' : 'none';
+  if (!priced.length) return;
+  var lookup = function(id){ return otherIngredients.find(function(o){ return o.id === id; }); };
+  var byMethod = function(m){ return priced.filter(function(o){ return (o.pricing.method||'produce') === m; }); };
+  document.getElementById('pp-produce-cards').innerHTML  = byMethod('produce').map(function(i){ return cardProduce(i, lookup); }).join('') || emptyMini('No juices yet.');
+  document.getElementById('pp-syrup-cards').innerHTML    = byMethod('syrup').map(function(i){ return cardSyrup(i, lookup, priced); }).join('') || emptyMini('No syrups yet.');
+  document.getElementById('pp-infusion-cards').innerHTML = byMethod('infusion').map(function(i){ return cardInfusion(i); }).join('') || emptyMini('No infusions yet.');
+}
+function emptyMini(msg){ return '<div style="font-size:12px;color:var(--ink-light);padding:4px 2px;">' + msg + '</div>'; }
+
+function cardHead(ing){
+  return '<div class="pp-card-head">'
+    + '<input class="pp-card-name" value="' + ppEsc(ing.name) + '" oninput="onBasicName(\'' + ing.id + '\', this)">'
+    + '<button class="pp-card-del" title="Remove from pricing" onclick="deleteBasic(\'' + ing.id + '\')">×</button>'
+    + '</div>';
+}
+function resultRow(ing, c){
+  return '<div class="pp-result">'
+    + '<span class="pp-peroz" id="pp-peroz-' + ing.id + '">$' + c.perOz.toFixed(3) + '<span style="font-size:10px;color:var(--ink-light);"> /oz</span></span>'
+    + '<span class="pp-batch" id="pp-meta-' + ing.id + '">' + c.note + '</span>'
+    + '</div>';
+}
+function fld(label, id, field, val, cls){
+  return '<div class="pp-field ' + (cls||'') + '"><label>' + label + '</label>'
+    + '<input type="number" step="0.01" value="' + (val === 0 || val ? val : '') + '" oninput="onBasicInput(\'' + id + '\',\'' + field + '\',this,true)"></div>';
+}
+
+function cardProduce(ing, lookup){
+  var p = ing.pricing, c = computeProduce(p);
+  var buySel = '<div class="pp-field full"><label>Buy by</label>'
+    + '<select onchange="onBasicSelect(\'' + ing.id + '\',\'buy\',this)">'
+    + '<option value="count"' + (p.buy==='count'?' selected':'') + '>Case (count)</option>'
+    + '<option value="each"' + (p.buy==='each'?' selected':'') + '>Per piece</option>'
+    + '<option value="weight"' + (p.buy==='weight'?' selected':'') + '>Per pound</option>'
+    + '</select></div>';
+  var costInputs = '', yieldInputs = '';
+  if (p.buy === 'weight') {
+    costInputs = fld('$ / lb', ing.id, 'lbPrice', p.lbPrice);
+    yieldInputs = fld('Juice yield %', ing.id, 'yieldPct', p.yieldPct);
+  } else if (p.buy === 'each') {
+    costInputs = fld('$ / piece', ing.id, 'eachPrice', p.eachPrice);
+    yieldInputs = fld('Avg weight (g)', ing.id, 'avgWeightG', p.avgWeightG) + fld('Juice yield %', ing.id, 'yieldPct', p.yieldPct);
+  } else {
+    costInputs = fld('Case price $', ing.id, 'packPrice', p.packPrice) + fld('Pieces / case', ing.id, 'packCount', p.packCount);
+    yieldInputs = fld('Avg weight (g)', ing.id, 'avgWeightG', p.avgWeightG) + fld('Juice yield %', ing.id, 'yieldPct', p.yieldPct);
+  }
+  var derived = '<div class="pp-field full"><label>Yields (food-science default, editable)</label>'
+    + '<div class="pp-derived" id="pp-oz-' + ing.id + '">≈ ' + (Math.round(c.ozPerUnit*100)/100) + ' oz juice / ' + c.unitLabel + '</div></div>';
+  return '<div class="pp-card">' + cardHead(ing) + '<div class="pp-fields">' + buySel + costInputs + yieldInputs + derived + '</div>' + resultRow(ing, c) + '</div>';
+}
+
+function cardSyrup(ing, lookup, priced){
+  var p = ing.pricing, c = computeSyrup(p, lookup);
+  var juices = priced.filter(function(o){ return (o.pricing.method||'produce') === 'produce'; });
+  var sweetOpts = ['sugar','honey','agave'].map(function(s){ return '<option value="'+s+'"'+(p.sweetenerType===s?' selected':'')+'>'+s.charAt(0).toUpperCase()+s.slice(1)+'</option>'; }).join('');
+  var ratioVals = [['1','1:1'],['1.5','1.5:1'],['2','2:1 (rich)'],['3','3:1']];
+  var ratioOpts = ratioVals.map(function(rv){ return '<option value="'+rv[0]+'"'+(String(p.ratio)===rv[0]?' selected':'')+'>'+rv[1]+'</option>'; }).join('');
+  var liqOpts = '<option value="">Water</option>' + juices.map(function(j){ return '<option value="'+j.id+'"'+(p.liquidId===j.id?' selected':'')+'>'+ppEsc(j.name)+'</option>'; }).join('');
+  var fields = ''
+    + '<div class="pp-field"><label>Sweetener</label><select onchange="onBasicSelect(\'' + ing.id + '\',\'sweetenerType\',this)">' + sweetOpts + '</select></div>'
+    + '<div class="pp-field"><label>Ratio (sweet:liquid)</label><select onchange="onBasicSelect(\'' + ing.id + '\',\'ratio\',this)">' + ratioOpts + '</select></div>'
+    + fld('Bag size (lb)', ing.id, 'bagLb', p.bagLb) + fld('Bag price $', ing.id, 'bagPrice', p.bagPrice)
+    + fld('Sweetener in batch (lb)', ing.id, 'sugarLb', p.sugarLb)
+    + '<div class="pp-field"><label>Liquid</label><select onchange="onBasicSelect(\'' + ing.id + '\',\'liquidId\',this)">' + liqOpts + '</select></div>'
+    + fld('Flavoring cost $', ing.id, 'addonCost', p.addonCost)
+    + '<div class="pp-field"><label>Yield oz (blank = est ' + (Math.round(c.estYield*10)/10) + ')</label>'
+      + '<input type="number" step="0.1" id="pp-yield-' + ing.id + '" value="' + (p.yieldOverride ? p.yieldOverride : '') + '" placeholder="' + (Math.round(c.estYield*10)/10) + '" oninput="onBasicInput(\'' + ing.id + '\',\'yieldOverride\',this,true)"></div>';
+  return '<div class="pp-card">' + cardHead(ing) + '<div class="pp-fields">' + fields + '</div>' + resultRow(ing, c) + '</div>';
+}
+
+function cardInfusion(ing){
+  var p = ing.pricing, c = computeInfusion(p);
+  var isWater = (!p.baseRef || p.baseRef === 'water');
+  var others = otherIngredients.filter(function(o){ return o.id !== ing.id; })
+    .map(function(o){ return '<option value="other:' + o.id + '"' + ((p.baseKind==='other' && p.baseRef===o.id)?' selected':'') + '>' + ppEsc(o.name) + '</option>'; }).join('');
+  var sp = spirits.slice().sort(function(a,b){ return ((a.brand||'')+(a.name||'')).localeCompare((b.brand||'')+(b.name||'')); })
+    .map(function(s){ var nm=[s.brand,s.name].filter(Boolean).join(' — '); return '<option value="spirit:' + s.id + '"' + ((p.baseKind==='spirit' && p.baseRef===s.id)?' selected':'') + '>' + ppEsc(nm) + '</option>'; }).join('');
+  var baseSel = '<div class="pp-field full"><label>Base liquid</label><select onchange="onInfusionBase(\'' + ing.id + '\',this)">'
+    + '<option value="water"' + (isWater?' selected':'') + '>Water (free)</option>'
+    + '<optgroup label="Other ingredients">' + others + '</optgroup>'
+    + '<optgroup label="Spirits">' + sp + '</optgroup>'
+    + '</select></div>';
+  var fields = baseSel
+    + fld('Base volume (oz)', ing.id, 'baseVolOz', p.baseVolOz)
+    + '<div class="pp-field"><label>Yield oz (blank = base)</label>'
+      + '<input type="number" step="0.1" id="pp-yield-' + ing.id + '" value="' + (p.yieldOverride ? p.yieldOverride : '') + '" placeholder="' + (Math.round(c.estYield*10)/10) + '" oninput="onBasicInput(\'' + ing.id + '\',\'yieldOverride\',this,true)"></div>'
+    + fld('Flavoring / solute (g)', ing.id, 'agentGrams', p.agentGrams)
+    + fld('Agent $ / lb', ing.id, 'agentPerLb', p.agentPerLb)
+    + fld('Other cost $', ing.id, 'otherCost', p.otherCost, 'full');
+  return '<div class="pp-card">' + cardHead(ing) + '<div class="pp-fields">' + fields + '</div>' + resultRow(ing, c) + '</div>';
+}
+function onInfusionBase(id, el){
+  var ing = findBasic(id); if (!ing || !ing.pricing) return;
+  var v = el.value;
+  if (v === 'water') { ing.pricing.baseKind = 'water'; ing.pricing.baseRef = 'water'; }
+  else { var parts = v.split(':'); ing.pricing.baseKind = (parts[0] === 'spirit') ? 'spirit' : 'other'; ing.pricing.baseRef = parts.slice(1).join(':'); }
+  recomputeBasics(); renderProduceTab(); queueBasicsSave();
+}
+
+// ─── EDIT HANDLERS ────────────────────────────────────────────────────────
+function findBasic(id){ return otherIngredients.find(function(o){ return o.id === id; }); }
+function onBasicInput(id, field, el, isNum){
+  var ing = findBasic(id); if (!ing || !ing.pricing) return;
+  ing.pricing[field] = isNum ? ppNum(el.value) : el.value;
+  recomputeBasics();
+  refreshBasicOutputs();
+  queueBasicsSave();
+}
+function onBasicSelect(id, field, el){
+  var ing = findBasic(id); if (!ing || !ing.pricing) return;
+  ing.pricing[field] = (field === 'ratio') ? ppNum(el.value) : el.value;
+  recomputeBasics();
+  renderProduceTab();   // buy-mode / liquid / sweetener change the visible fields
+  queueBasicsSave();
+}
+function onBasicName(id, el){
+  var ing = findBasic(id); if (!ing) return;
+  ing.name = el.value;
+  queueBasicsSave();
+}
+// Update only the computed spans + est-yield placeholders — never the inputs, so
+// the field the user is typing in keeps focus.
+function refreshBasicOutputs(){
+  var lookup = function(id){ return otherIngredients.find(function(o){ return o.id === id; }); };
+  otherIngredients.filter(function(o){ return o.pricing; }).forEach(function(ing){
+    var c = computeBasic(ing, lookup);
+    var per = document.getElementById('pp-peroz-' + ing.id);
+    if (per) per.innerHTML = '$' + c.perOz.toFixed(3) + '<span style="font-size:10px;color:var(--ink-light);"> /oz</span>';
+    var meta = document.getElementById('pp-meta-' + ing.id);
+    if (meta) meta.textContent = c.note;
+    if (ing.pricing.method === 'syrup' || ing.pricing.method === 'infusion') {
+      var yEl = document.getElementById('pp-yield-' + ing.id);
+      if (yEl) yEl.placeholder = String(Math.round(c.estYield*10)/10);
+    }
+    if (!ing.pricing.method || ing.pricing.method === 'produce') {
+      var ozEl = document.getElementById('pp-oz-' + ing.id);
+      if (ozEl) ozEl.textContent = '≈ ' + (Math.round(c.ozPerUnit*100)/100) + ' oz juice / ' + c.unitLabel;
+    }
+  });
+}
+
+function queueBasicsSave(){
+  if (_basicsSaveTimer) clearTimeout(_basicsSaveTimer);
+  _basicsSaveTimer = setTimeout(function(){ saveBasics(); }, 900);
+}
+function saveBasics(explicit){
+  if (_basicsSaveTimer) { clearTimeout(_basicsSaveTimer); _basicsSaveTimer = null; }
+  recomputeBasics();
+  save();
+  updateSubtitle();
+  if (explicit) showToast('✓ Prices saved — recipes updated');
+}
+
+// ─── ADD / REMOVE / SEED ────────────────────────────────────────────────────
+function newPricing(method){
+  if (method === 'syrup') return { method:'syrup', sweetenerType:'sugar', bagLb:50, bagPrice:30, sugarLb:5, ratio:1, liquidId:'', addonCost:0, addonNote:'', yieldOverride:0 };
+  if (method === 'infusion') return { method:'infusion', baseRef:'water', baseKind:'water', baseVolOz:25.4, agentGrams:0, agentPerLb:0, otherCost:0, otherNote:'', yieldOverride:0 };
+  return { method:'produce', buy:'count', packPrice:0, packCount:0, eachPrice:0, lbPrice:0, avgWeightG:100, yieldPct:45 };
+}
+function categoryFor(method){ return method === 'syrup' ? 'Syrup' : (method === 'infusion' ? 'House-made' : 'Juice'); }
+
+function addBasic(method){
+  var name = prompt('Name for this ' + method + ' (e.g. ' + (method==='syrup'?'Demerara Syrup':method==='infusion'?'Raisin Gin':'Fresh Lemon Juice') + '):');
+  if (name === null) return;
+  name = name.trim(); if (!name) return;
+  // Reuse an existing other-ingredient of the same name if present, else create.
+  var ex = otherIngredients.find(function(o){ return ppNormName(o.name) === ppNormName(name); });
+  if (ex) { ex.pricing = ex.pricing || newPricing(method); ex.pricing.method = method; }
+  else {
+    otherIngredients.push({ id: crypto.randomUUID(), name: name, category: categoryFor(method),
+      sizeOz: 0, cost: 0, costPerOz: 0, notes: '', source: 'pricing', pricing: newPricing(method) });
+  }
+  renderProduceTab();
+  saveBasics(true);
+}
+function deleteBasic(id){
+  var ing = findBasic(id); if (!ing) return;
+  if (!confirm('Remove "' + ing.name + '" from the pricing tool?\n\nThe ingredient itself stays in Other Ingredients with its current cost — only the calculator inputs are removed.')) return;
+  delete ing.pricing;
+  renderProduceTab();
+  saveBasics(true);
+}
+
+// One-click starter set of the standard H&G basics. Links to existing seeded
+// ingredients by name where possible, creates the rest. Starter numbers only.
+function seedBasics(){
+  var seeds = [
+    // produce / juice
+    { name:'Fresh Lemon Juice', method:'produce', cat:'Juice', p:{ buy:'count', packPrice:45, packCount:165, avgWeightG:YIELD.lemon.g, yieldPct:YIELD.lemon.pct } },
+    { name:'Fresh Lime Juice',  method:'produce', cat:'Juice', p:{ buy:'count', packPrice:30, packCount:200, avgWeightG:YIELD.lime.g, yieldPct:YIELD.lime.pct } },
+    { name:'Fresh Orange Juice',method:'produce', cat:'Juice', p:{ buy:'count', packPrice:40, packCount:88,  avgWeightG:YIELD.orange.g, yieldPct:YIELD.orange.pct } },
+    { name:'Fresh Grapefruit Juice', method:'produce', cat:'Juice', p:{ buy:'each', eachPrice:1.25, avgWeightG:YIELD.grapefruit.g, yieldPct:YIELD.grapefruit.pct } },
+    { name:'Pineapple Juice',   method:'produce', cat:'Juice', p:{ buy:'each', eachPrice:3.50, avgWeightG:YIELD.pineapple.g, yieldPct:YIELD.pineapple.pct } },
+    { name:'Ginger Juice',      method:'produce', cat:'Juice', p:{ buy:'weight', lbPrice:3.00, yieldPct:YIELD.ginger.pct } },
+    { name:'Egg White',         method:'produce', cat:'Dairy', p:{ buy:'count', packPrice:45, packCount:180, avgWeightG:YIELD.egg.g, yieldPct:YIELD.egg.pct } },
+    // syrups
+    { name:'Simple Syrup',        method:'syrup', cat:'Syrup', p:{ sweetenerType:'sugar', bagLb:50, bagPrice:30, sugarLb:5, ratio:1, liquidId:'', addonCost:0, yieldOverride:0 } },
+    { name:'Rich Simple Syrup',   method:'syrup', cat:'Syrup', p:{ sweetenerType:'sugar', bagLb:50, bagPrice:30, sugarLb:5, ratio:2, liquidId:'', addonCost:0, yieldOverride:0 } },
+    { name:'Honey Syrup',         method:'syrup', cat:'Syrup', p:{ sweetenerType:'honey', bagLb:5,  bagPrice:25, sugarLb:3, ratio:3, liquidId:'', addonCost:0, yieldOverride:0 } },
+    { name:'Cinnamon Syrup',      method:'syrup', cat:'Syrup', p:{ sweetenerType:'sugar', bagLb:50, bagPrice:30, sugarLb:5, ratio:2, liquidId:'', addonCost:3, yieldOverride:0 } },
+    { name:'Ginger Syrup',        method:'syrup', cat:'Syrup', p:{ sweetenerType:'sugar', bagLb:50, bagPrice:30, sugarLb:5, ratio:2, liquidId:'__ginger__', addonCost:0, yieldOverride:0 } },
+    { name:'Vanilla Simple Syrup',method:'syrup', cat:'Syrup', p:{ sweetenerType:'sugar', bagLb:50, bagPrice:30, sugarLb:5, ratio:1, liquidId:'', addonCost:5, yieldOverride:0 } },
+    // infusions (incl. water-base solutions)
+    { name:'Saline Solution',     method:'infusion', cat:'House-made', p:{ baseRef:'water', baseKind:'water', baseVolOz:4,  agentGrams:20, agentPerLb:1.0, otherCost:0,   otherNote:'Salt', yieldOverride:4 } },
+    { name:'Citric Acid Solution',method:'infusion', cat:'House-made', p:{ baseRef:'water', baseKind:'water', baseVolOz:8,  agentGrams:50, agentPerLb:8.0, otherCost:0,   otherNote:'Citric acid', yieldOverride:8 } },
+    { name:'Olive Brine',         method:'infusion', cat:'House-made', p:{ baseRef:'water', baseKind:'water', baseVolOz:20, agentGrams:31, agentPerLb:1.0, otherCost:0.5, otherNote:'Salt + lactic', yieldOverride:20 } }
+  ];
+  var byName = {};
+  seeds.forEach(function(s){
+    var ex = otherIngredients.find(function(o){ return ppNormName(o.name) === ppNormName(s.name); });
+    var p = {}; for (var k in s.p) p[k] = s.p[k]; p.method = s.method;
+    if (ex) { if (!ex.pricing) ex.pricing = p; else { ex.pricing.method = s.method; } byName[s.name] = ex; }
+    else {
+      var ing = { id: crypto.randomUUID(), name: s.name, category: s.cat, sizeOz:0, cost:0, costPerOz:0, notes:'', source:'pricing', pricing:p };
+      otherIngredients.push(ing); byName[s.name] = ing;
+    }
+  });
+  // Resolve Ginger Syrup's liquid link now that Ginger Juice exists.
+  var gs = byName['Ginger Syrup'], gj = byName['Ginger Juice'];
+  if (gs && gs.pricing.liquidId === '__ginger__') gs.pricing.liquidId = gj ? gj.id : '';
+  renderProduceTab();
+  saveBasics(true);
 }
 </script>
 </body>
