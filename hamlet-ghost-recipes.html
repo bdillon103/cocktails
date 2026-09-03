@@ -527,7 +527,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 18;
+const APP_BUILD = 19;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -1934,6 +1934,11 @@ function applyPourPlan(data){
 }
 
 function maybeShowMigrationBanner(){
+  // Legacy blob-era migration: it writes relinks/renames to the blob, but in the
+  // default relational mode recipes load from the tables — so recipe-row changes
+  // never persist (the banner just returns next load) and applying it swaps stale
+  // blob recipes into memory (a revert risk). Only offer it under ?src=blob.
+  if (TABLES_MODE) { const b = document.getElementById('pour-migrate-banner'); if (b) b.remove(); return; }
   const plan = detectPourMigration({ recipes, spirits, otherIngredients });
   const total = plan.counts.rows + plan.counts.merges + plan.counts.renames;
   const existing = document.getElementById('pour-migrate-banner');
@@ -1971,6 +1976,14 @@ function openMigrationModal(){
   document.body.appendChild(modal);
 }
 async function runPourMigration(){
+  // Belt-and-suspenders: never run the blob-era apply in relational mode (see
+  // maybeShowMigrationBanner) — it can't persist recipe relinks to the tables and
+  // would swap stale blob recipes into memory.
+  if (TABLES_MODE) {
+    const m = document.getElementById('pour-migrate-modal'); if (m) m.remove();
+    const b = document.getElementById('pour-migrate-banner'); if (b) b.remove();
+    return;
+  }
   const btn = document.querySelector('#pour-migrate-modal .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Migrating…'; }
   // True no-op if there's nothing to do — no write, no log entry.
