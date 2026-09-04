@@ -528,7 +528,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 21;
+const APP_BUILD = 22;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -888,6 +888,15 @@ function rowToRecipe(c, lines) {
     r.bpSteps = (Array.isArray(c.steps) && c.steps.length) ? c.steps : ((c.legacy && Array.isArray(c.legacy.bpSteps)) ? c.legacy.bpSteps : []);
     // legacy mirror kept in sync so any old bpIngredients reader still works
     r.bpIngredients = lines.map(l => ({ qty: qtyOf(l), unit: l.unit || '', name: l.ingredient_name || '' }));
+    // Cost/yield fields aren't table columns — recomputeBPCost derives them from
+    // components, but carry the legacy values so flat-cost preps and measured
+    // (non-sum-of-parts) yields survive until they're edited/re-saved.
+    var lg = c.legacy || {};
+    if (lg.yieldManual != null) r.yieldManual = lg.yieldManual;
+    if (lg.yieldOz != null) r.yieldOz = lg.yieldOz;
+    if (lg.flatBatchOz != null) r.flatBatchOz = lg.flatBatchOz;
+    if (lg.flatCostDollars != null) r.flatCostDollars = lg.flatCostDollars;
+    if (lg.costPerOz != null) r.costPerOz = lg.costPerOz;
   }
   return r;
 }
@@ -1186,6 +1195,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   } else {
     recipes = appData2.recipes || [];
   }
+  // Bar-prep costPerOz isn't a stored column — it's derived from components +
+  // yield. Recompute it for every prep at load so priced preps appear in the
+  // cocktail ingredient autocomplete (which filters on costPerOz > 0) and flow
+  // their cost through. Runs before snapshotRecipes so it never marks anything
+  // dirty. (Was implicitly lost when recipes moved to tables at the flip.)
+  recipes.forEach(function(r){ if (r && r.recipeType === 'barprep') { try { recomputeBPCost(r); } catch(e){} } });
   snapshotRecipes();
   renderSidebar();
   updateSubtitle();
@@ -2070,7 +2085,11 @@ function acSearch(idx, query) {
   const drop = document.getElementById(`ac-drop-${idx}`);
   if (!drop) return;
   const q = query.toLowerCase().trim();
-  const bpItems = recipes.filter(r => r.recipeType === 'barprep' && r.costPerOz > 0 && r.id !== currentRecipeId).map(r => ({
+  // Show ALL bar preps (minus the one being edited), not just priced ones —
+  // an unpriced prep still appears, labelled "⚠ unpriced" like any unpriced
+  // spirit, so it can be added now and priced later. Its cost (if any) is
+  // computed at load by recomputeBPCost and flows through when selected.
+  const bpItems = recipes.filter(r => r.recipeType === 'barprep' && r.id !== currentRecipeId).map(r => ({
     id: r.id, brand: null, name: r.name, subcategory: 'Bar Prep', category: 'Bar Prep', costPerOz: r.costPerOz
   }));
   const all = [...spirits, ...otherIngredients, ...bpItems];
