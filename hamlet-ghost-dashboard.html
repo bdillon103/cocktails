@@ -404,7 +404,7 @@ async function loadAppData() {
 const PAGE_ID = 'dashboard';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 22;
+const APP_BUILD = 23;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -677,6 +677,8 @@ async function loadData() {
     otherIngredients = data.otherIngredients || [];
   }
   allRecipes = TABLES_MODE ? await loadRecipesFromTables() : (data.recipes || []);
+  barPreps = allRecipes.filter(r => r.recipeType === 'barprep');
+  computePrepCosts();
   menus = data.menus || [];
   salesData = data.salesData || {};
   // Always read fresh from menus array
@@ -717,8 +719,26 @@ async function saveSalesData() {
 }
 
 // ─── COSTING ─────────────────────────────────────────────────────────────────
+// Bar preps (batches/infusions) aren't priced ingredients — approximate their
+// cost/oz from component lines (auto yield = sum of volume parts) so cocktails
+// built on a prep still show a pour cost. Recipe Builder stays the exact source.
+let barPreps = [];
+function prepUnitOz(qty, unit){ var q = parseFloat(qty) || 0; return unit === 'ml' ? q / 29.5735 : q; }
+function computePrepCosts(){
+  barPreps.forEach(function(p){
+    var sumCost = 0, sumVol = 0;
+    (p.ingredients || []).forEach(function(c){
+      if (!c.ingredientId || (c.unit !== 'oz' && c.unit !== 'ml')) return;
+      var base = spirits.find(function(s){return s.id===c.ingredientId;}) || otherIngredients.find(function(o){return o.id===c.ingredientId;});
+      var oz = prepUnitOz(c.qty, c.unit);
+      if (base && base.costPerOz) sumCost += oz * base.costPerOz;
+      sumVol += oz;
+    });
+    if (p.costPerOz == null && sumVol > 0) p.costPerOz = Math.round((sumCost / sumVol) * 1000) / 1000;
+  });
+}
 function findIng(id) {
-  return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || null;
+  return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || barPreps.find(p => p.id === id) || null;
 }
 
 function calcCost(r) {
