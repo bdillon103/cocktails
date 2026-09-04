@@ -339,6 +339,46 @@ function rowToRecipe(c, lines) {
   }
   return r;
 }
+// ─── INGREDIENTS · relational read (Phase 3 flip) ────────────────────────────
+function ingNum(v){ return (v === null || v === undefined || v === '') ? null : Number(v); }
+function rowToIng(r){
+  var base = (r.legacy && typeof r.legacy === 'object') ? r.legacy : {};
+  var ing = Object.assign({}, base, {
+    id: r.id,
+    name: r.name != null ? r.name : base.name,
+    category: r.category != null ? r.category : base.category,
+    cost: ingNum(r.cost),
+    costPerOz: ingNum(r.cost_per_oz),
+    notes: r.notes != null ? r.notes : base.notes,
+    source: r.source != null ? r.source : base.source
+  });
+  if (r.kind === 'spirit') {
+    ing.brand = r.brand != null ? r.brand : base.brand;
+    ing.subcategory = r.subcategory != null ? r.subcategory : base.subcategory;
+    ing.distributor = r.distributor != null ? r.distributor : base.distributor;
+    ing.specSheetName = r.spec_sheet_name != null ? r.spec_sheet_name : base.specSheetName;
+    ing.sizeML = ingNum(r.size_ml);
+    ing.sizeLabel = r.size_label != null ? r.size_label : base.sizeLabel;
+    if (!ing.category) ing.category = 'Spirit';
+  } else {
+    ing.sizeOz = ingNum(r.size_oz);
+    if (r.pricing != null) ing.pricing = r.pricing;
+  }
+  return ing;
+}
+async function loadIngredientsFromTables(){
+  var out = [], from = 0, page = 1000;
+  while (true) {
+    var chunk = await sbRequest('GET', '/rest/v1/ingredients?select=*&order=name.asc&limit=' + page + '&offset=' + from) || [];
+    out = out.concat(chunk);
+    if (chunk.length < page) break;
+    from += page;
+  }
+  var sp = [], ot = [];
+  out.forEach(function(r){ if (r.active === false) return; (r.kind === 'spirit' ? sp : ot).push(rowToIng(r)); });
+  return { spirits: sp, otherIngredients: ot };
+}
+
 async function loadRecipesFromTables() {
   const cocktails = await sbRequest('GET', '/rest/v1/cocktails?select=*') || [];
   const lines     = await sbRequest('GET', '/rest/v1/cocktail_ingredients?select=*') || [];
@@ -373,7 +413,7 @@ async function loadAppData() {
 // NB: the Menu Grid is read-only — it never writes the blob — but it keeps the
 // same hardened data layer as the other pages for consistency.
 const PAGE_ID = 'grid';
-const APP_BUILD = 20;
+const APP_BUILD = 21;
 let appIsStale = false;
 function currentUserEmail() {
   try { const s = getSession(); return (s && s.user && s.user.email) || 'unknown'; }
@@ -523,8 +563,13 @@ window.addEventListener('DOMContentLoaded', async function() {
   }
   try {
     var appData = await loadAppData();
-    spirits = appData.spirits || [];
-    otherIngredients = appData.otherIngredients || [];
+    if (TABLES_MODE) {
+      var _ing = await loadIngredientsFromTables();
+      spirits = _ing.spirits; otherIngredients = _ing.otherIngredients;
+    } else {
+      spirits = appData.spirits || [];
+      otherIngredients = appData.otherIngredients || [];
+    }
     var allRecipes = TABLES_MODE ? await loadRecipesFromTables() : (appData.recipes || []);
     var allMenus = appData.menus || [];
     var activeMenu = allMenus.filter(function(m){return m.isActive;})[0] || allMenus[0] || null;

@@ -1035,13 +1035,14 @@ async function fetchWithTimeout(url, opts, ms) {
   finally { clearTimeout(t); }
 }
 
-async function sbRequest(method, path, body) {
+async function sbRequest(method, path, body, extraHeaders) {
   const session = await getValidSession();
   const headers = {
     'apikey': SUPABASE_KEY,
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${session ? session.access_token : SUPABASE_KEY}`
   };
+  if (extraHeaders) Object.assign(headers, extraHeaders);
   const res = await fetchWithTimeout(SUPABASE_URL + path, {
     method,
     cache: 'no-store',   // NEVER read the blob from the browser HTTP cache — a stale
@@ -1143,10 +1144,104 @@ async function loadAppData() {
   return migrateFromOldKeys();
 }
 
+// ─── INGREDIENTS · relational tables (Phase 3 flip) ──────────────────────────
+// Ingredients moved off the blob into the per-row `ingredients` table (kind =
+// spirit|other), same store recipes resolve their cost links against. Default
+// is tables; ?src=blob is the escape hatch to the untouched blob backup.
+const ING_TABLES_MODE = new URLSearchParams(location.search).get('src') !== 'blob';
+function ingNum(v){ return (v === null || v === undefined || v === '') ? null : Number(v); }
+// Row → in-memory ingredient. `legacy` holds the full original camelCase record,
+// so start there and overlay the authoritative columns + pricing.
+function rowToIng(r){
+  var base = (r.legacy && typeof r.legacy === 'object') ? r.legacy : {};
+  var ing = Object.assign({}, base, {
+    id: r.id,
+    name: r.name != null ? r.name : base.name,
+    category: r.category != null ? r.category : base.category,
+    cost: ingNum(r.cost),
+    costPerOz: ingNum(r.cost_per_oz),
+    notes: r.notes != null ? r.notes : base.notes,
+    source: r.source != null ? r.source : base.source
+  });
+  if (r.kind === 'spirit') {
+    ing.brand = r.brand != null ? r.brand : base.brand;
+    ing.subcategory = r.subcategory != null ? r.subcategory : base.subcategory;
+    ing.distributor = r.distributor != null ? r.distributor : base.distributor;
+    ing.specSheetName = r.spec_sheet_name != null ? r.spec_sheet_name : base.specSheetName;
+    ing.sizeML = ingNum(r.size_ml);
+    ing.sizeLabel = r.size_label != null ? r.size_label : base.sizeLabel;
+    if (!ing.category) ing.category = 'Spirit';
+  } else {
+    ing.sizeOz = ingNum(r.size_oz);
+    if (r.pricing != null) ing.pricing = r.pricing;
+  }
+  return ing;
+}
+async function loadIngredientsFromTables(){
+  // RLS scopes rows to the current tenant. Page via limit/offset to beat the cap.
+  var out = [], from = 0, page = 1000;
+  while (true) {
+    var chunk = await sbRequest('GET', '/rest/v1/ingredients?select=*&order=name.asc&limit=' + page + '&offset=' + from) || [];
+    out = out.concat(chunk);
+    if (chunk.length < page) break;
+    from += page;
+  }
+  var sp = [], ot = [];
+  out.forEach(function(r){ if (r.active === false) return; (r.kind === 'spirit' ? sp : ot).push(rowToIng(r)); });
+  return { spirits: sp, otherIngredients: ot };
+}
+// In-memory ingredient → table row (full record mirrored into `legacy`).
+function ingToRow(ing, kind){
+  var row = {
+    id: ing.id, tenant: TENANT, kind: kind,
+    name: ing.name || '', category: ing.category || null,
+    cost: ing.cost != null ? ing.cost : null,
+    cost_per_oz: ing.costPerOz != null ? ing.costPerOz : null,
+    notes: ing.notes || null, source: ing.source || null,
+    active: true, legacy: ing
+  };
+  if (kind === 'spirit') {
+    row.brand = ing.brand || null; row.subcategory = ing.subcategory || null;
+    row.distributor = ing.distributor || null; row.spec_sheet_name = ing.specSheetName || null;
+    row.size_ml = ing.sizeML != null ? ing.sizeML : null; row.size_label = ing.sizeLabel || null;
+  } else {
+    row.size_oz = ing.sizeOz != null ? ing.sizeOz : null;
+    row.pricing = ing.pricing != null ? ing.pricing : null;
+  }
+  return row;
+}
+// Tables-mode save: upsert the ingredients THIS session changed (snapshot-diff,
+// same dirty detection the blob path used) and delete the ones removed. Per-row
+// isolated writes — no whole-blob read-modify-write, so no concurrent-revert.
+async function saveIngTables(){
+  var changed = [];
+  spirits.forEach(function(s){ if (spiritSnapshots.get(s.id) !== JSON.stringify(s)) changed.push(ingToRow(s, 'spirit')); });
+  otherIngredients.forEach(function(o){ if (otherSnapshots.get(o.id) !== JSON.stringify(o)) changed.push(ingToRow(o, 'other')); });
+  var dels = [].concat(Array.from(deletedSpiritIds), Array.from(deletedOtherIngredientIds));
+  try {
+    if (changed.length) {
+      await sbRequest('POST', '/rest/v1/ingredients?on_conflict=id', changed,
+        { Prefer: 'resolution=merge-duplicates,return=minimal' });
+    }
+    for (var i = 0; i < dels.length; i++) {
+      await sbRequest('DELETE', '/rest/v1/ingredients?id=eq.' + dels[i], null, { Prefer: 'return=minimal' });
+    }
+    hideUnsavedError();
+    spiritSnapshots = snapList(spirits);
+    otherSnapshots = snapList(otherIngredients);
+    deletedSpiritIds.clear();
+    deletedOtherIngredientIds.clear();
+  } catch (e) {
+    pendingSaveRetry = () => saveIngTables();
+    showUnsavedError('Not saved — can’t reach the server. Your last change is only on this screen. Keep this tab open and click Retry.');
+    throw e;
+  }
+}
+
 const PAGE_ID = 'ingredients';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 20;
+const APP_BUILD = 21;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -1447,10 +1542,12 @@ function mergeById(freshList, localList, snaps, deletedIds, collection, fields, 
 }
 
 async function save(opts) {
-  // Override only records this session edited (snapshot-diff), so a concurrent
-  // save from another open session/tab doesn't clobber ingredients this
-  // session never touched. opts.suppressItemLog skips per-row logging (used by
-  // bulk import, which logs a single summary line instead).
+  // Tables mode: per-row upsert/delete of just what changed (see saveIngTables).
+  if (ING_TABLES_MODE) return saveIngTables();
+  // Blob mode (?src=blob): override only records this session edited (snapshot-
+  // diff), so a concurrent save from another open session/tab doesn't clobber
+  // ingredients this session never touched. opts.suppressItemLog skips per-row
+  // logging (used by bulk import, which logs a single summary line instead).
   opts = opts || {};
   try {
     await commitSave((data) => {
@@ -1480,11 +1577,19 @@ async function save(opts) {
 }
 
 async function load() {
-  const data = await loadAppData();
-  spirits = data.spirits || [];
-  otherIngredients = data.otherIngredients || [];
-  importMeta = data.importMeta || null;
-  if (otherIngredients.length === 0) seedDefaults();
+  if (ING_TABLES_MODE) {
+    const t = await loadIngredientsFromTables();
+    spirits = t.spirits;
+    otherIngredients = t.otherIngredients;
+    // importMeta is per-device banner state; keep it off the blob in tables mode.
+    try { importMeta = JSON.parse(localStorage.getItem('hg_import_meta_' + TENANT) || 'null'); } catch(e) { importMeta = null; }
+  } else {
+    const data = await loadAppData();
+    spirits = data.spirits || [];
+    otherIngredients = data.otherIngredients || [];
+    importMeta = data.importMeta || null;
+    if (otherIngredients.length === 0) seedDefaults();
+  }
   spiritSnapshots = snapList(spirits);
   otherSnapshots = snapList(otherIngredients);
 }
@@ -1685,6 +1790,8 @@ function processXLSX(file) {
         unpriced, updated: nUpdated, added: nAdded,
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       };
+      // Tables mode keeps the import banner state per-device (off the blob).
+      if (ING_TABLES_MODE) { try { localStorage.setItem('hg_import_meta_' + TENANT, JSON.stringify(importMeta)); } catch(e) {} }
       // One summary line in the change log instead of hundreds of per-row entries.
       save({ suppressItemLog: true, summaryEntry: makeLogEntry({ collection:'spirit', item:'Spirit library', field:'imported spreadsheet', from:null, to:`${nUpdated} updated, ${nAdded} added (${file.name})`, action:'import' }) });
 
