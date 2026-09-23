@@ -935,11 +935,12 @@
               <option value="16">1 pint (16 oz)</option>
               <option value="128">1 gallon (128 oz)</option>
               <option value="custom">Custom (oz)</option>
+              <option value="customg">Custom (grams)</option>
             </select>
           </div>
         </div>
         <div id="o-custom-size-wrap" style="display:none;" class="form-group">
-          <label class="form-label">Custom Size (oz)</label>
+          <label class="form-label" id="o-custom-label">Custom Size (oz)</label>
           <input type="number" class="form-input" id="o-size-custom" placeholder="e.g. 48" oninput="calcOtherCostPerOz()">
         </div>
         <div class="form-row">
@@ -1241,7 +1242,7 @@ async function saveIngTables(){
 const PAGE_ID = 'ingredients';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 23;
+const APP_BUILD = 24;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -1976,9 +1977,11 @@ function renderOtherTable() {
     <tr>
       <td><div class="ing-name">${ing.name}</div></td>
       <td><span class="badge badge-other">${ing.category}</span></td>
-      <td style="font-family:var(--mono);font-size:12px;">${ing.sizeOz} oz</td>
+      <td style="font-family:var(--mono);font-size:12px;">${ing.sizeUnit === 'g' && ing.sizeG != null ? ing.sizeG + ' g' : ing.sizeOz + ' oz'}</td>
       <td>${ing.cost ? `<span class="cost-val">$${parseFloat(ing.cost).toFixed(2)}</span>` : noPriceHTML()}</td>
-      <td>${ing.costPerOz ? `<span class="cost-per-oz">$${parseFloat(ing.costPerOz).toFixed(3)}</span>` : '—'}</td>
+      <td>${ing.sizeUnit === 'g'
+        ? (ing.costPerG ? `<span class="cost-per-oz">$${parseFloat(ing.costPerG).toFixed(4)}/g</span>` : '—')
+        : (ing.costPerOz ? `<span class="cost-per-oz">$${parseFloat(ing.costPerOz).toFixed(3)}</span>` : '—')}</td>
       <td class="distributor">${ing.notes || '—'}</td>
       <td><div class="row-actions">
         <button class="icon-btn" onclick="openEditOther('${ing.id}')"><i class="ti ti-pencil" aria-hidden="true"></i></button>
@@ -2056,19 +2059,26 @@ function calcCostPerOz() {
   }
 }
 
+const G_PER_OZ = 28.3495;   // grams per (weight) ounce
 function calcOtherCostPerOz() {
   const sizeVal = document.getElementById('o-size').value;
-  const customWrap = document.getElementById('o-custom-size-wrap');
-  customWrap.style.display = sizeVal === 'custom' ? 'block' : 'none';
-  const oz = sizeVal === 'custom'
-    ? parseFloat(document.getElementById('o-size-custom').value) || 0
-    : parseFloat(sizeVal) || 32;
+  const isG = sizeVal === 'customg';
+  const isCustom = sizeVal === 'custom' || isG;
+  document.getElementById('o-custom-size-wrap').style.display = isCustom ? 'block' : 'none';
+  const lbl = document.getElementById('o-custom-label');
+  const inp = document.getElementById('o-size-custom');
+  if (lbl) lbl.textContent = isG ? 'Custom Size (grams)' : 'Custom Size (oz)';
+  if (inp) inp.placeholder = isG ? 'e.g. 500' : 'e.g. 48';
+  const amt = isCustom ? (parseFloat(inp.value) || 0) : (parseFloat(sizeVal) || 32);
   const cost = parseFloat(document.getElementById('o-cost').value) || 0;
   const preview = document.getElementById('o-cost-preview');
-  if (oz > 0 && cost > 0) {
-    const perOz = cost / oz;
+  if (amt > 0 && cost > 0) {
     preview.style.display = 'block';
-    preview.textContent = `Cost per oz: $${perOz.toFixed(3)}`;
+    if (isG) {
+      preview.textContent = `Cost: $${(cost / amt).toFixed(4)}/g  ·  $${(cost / (amt / G_PER_OZ)).toFixed(3)}/oz`;
+    } else {
+      preview.textContent = `Cost per oz: $${(cost / amt).toFixed(3)}`;
+    }
   } else {
     preview.style.display = 'none';
   }
@@ -2114,20 +2124,35 @@ function saveOtherIngredient() {
   const name = document.getElementById('o-name').value.trim();
   if (!name) { showToast('Enter ingredient name'); return; }
   const sizeVal = document.getElementById('o-size').value;
-  const oz = sizeVal === 'custom'
-    ? parseFloat(document.getElementById('o-size-custom').value) || 32
+  const isG = sizeVal === 'customg';
+  const rawSize = (sizeVal === 'custom' || isG)
+    ? parseFloat(document.getElementById('o-size-custom').value) || 0
     : parseFloat(sizeVal) || 32;
   const cost = parseFloat(document.getElementById('o-cost').value) || 0;
-  const costPerOz = oz > 0 && cost > 0 ? cost / oz : 0;
   const ing = {
     id: crypto.randomUUID(),
     name,
     category: document.getElementById('o-cat').value,
-    sizeOz: oz,
-    cost, costPerOz: Math.round(costPerOz * 1000) / 1000,
     notes: document.getElementById('o-notes').value.trim(),
     source: 'manual'
   };
+  if (isG) {
+    // Dry goods (citric acid, tea, coffee): batch stored by weight in grams,
+    // with a weight-oz equivalent so cost/oz stays consistent with everything else.
+    const grams = rawSize || 500;
+    const oz = grams / G_PER_OZ;
+    ing.sizeUnit = 'g';
+    ing.sizeG = grams;
+    ing.sizeOz = Math.round(oz * 1000) / 1000;
+    ing.cost = cost;
+    ing.costPerG = (grams > 0 && cost > 0) ? Math.round((cost / grams) * 10000) / 10000 : 0;
+    ing.costPerOz = (oz > 0 && cost > 0) ? Math.round((cost / oz) * 1000) / 1000 : 0;
+  } else {
+    const oz = rawSize || 32;
+    ing.sizeOz = oz;
+    ing.cost = cost;
+    ing.costPerOz = (oz > 0 && cost > 0) ? Math.round((cost / oz) * 1000) / 1000 : 0;
+  }
   otherIngredients.push(ing);
   save();
   renderOtherTable();
@@ -2234,7 +2259,9 @@ function openEditOther(id) {
           ${['Juice','Syrup','House-made','Garnish','Dairy','Other'].map(o => `<option value="${o}" ${o === ing.category ? 'selected' : ''}>${o}</option>`).join('')}
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Batch Size (oz)</label><input type="number" class="form-input" id="eo-size" value="${ing.sizeOz}"></div>
+      ${ing.sizeUnit === 'g'
+        ? `<div class="form-group"><label class="form-label">Batch Size (grams)</label><input type="number" class="form-input" id="eo-size" value="${ing.sizeG != null ? ing.sizeG : ''}"></div>`
+        : `<div class="form-group"><label class="form-label">Batch Size (oz)</label><input type="number" class="form-input" id="eo-size" value="${ing.sizeOz}"></div>`}
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Batch Cost ($)</label><input type="number" class="form-input" id="eo-cost" value="${ing.cost || ''}"></div>
@@ -2250,17 +2277,29 @@ function openEditOther(id) {
 function saveOtherEdit() {
   const idx = otherIngredients.findIndex(o => o.id === editingId);
   if (idx === -1) return;
+  const rec = otherIngredients[idx];
   const cost = parseFloat(document.getElementById('eo-cost').value) || 0;
-  const oz = parseFloat(document.getElementById('eo-size').value) || 32;
-  const costPerOz = cost > 0 && oz > 0 ? cost / oz : 0;
-  otherIngredients[idx] = {
-    ...otherIngredients[idx],
+  const rawSize = parseFloat(document.getElementById('eo-size').value) || 0;
+  const patch = {
     name: document.getElementById('eo-name').value.trim(),
     category: document.getElementById('eo-cat').value,
-    sizeOz: oz, cost,
-    costPerOz: Math.round(costPerOz * 1000) / 1000,
+    cost,
     notes: document.getElementById('eo-notes').value.trim()
   };
+  if (rec.sizeUnit === 'g') {
+    const grams = rawSize || rec.sizeG || 0;
+    const oz = grams / G_PER_OZ;
+    patch.sizeUnit = 'g';
+    patch.sizeG = grams;
+    patch.sizeOz = Math.round(oz * 1000) / 1000;
+    patch.costPerG = (grams > 0 && cost > 0) ? Math.round((cost / grams) * 10000) / 10000 : 0;
+    patch.costPerOz = (oz > 0 && cost > 0) ? Math.round((cost / oz) * 1000) / 1000 : 0;
+  } else {
+    const oz = rawSize || 32;
+    patch.sizeOz = oz;
+    patch.costPerOz = (cost > 0 && oz > 0) ? Math.round((cost / oz) * 1000) / 1000 : 0;
+  }
+  otherIngredients[idx] = { ...rec, ...patch };
   save();
   renderOtherTable();
   updateSubtitle();
