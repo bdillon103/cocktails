@@ -404,7 +404,7 @@ async function loadAppData() {
 const PAGE_ID = 'dashboard';
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 26;
+const APP_BUILD = 27;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -723,19 +723,36 @@ async function saveSalesData() {
 // cost/oz from component lines (auto yield = sum of volume parts) so cocktails
 // built on a prep still show a pour cost. Recipe Builder stays the exact source.
 let barPreps = [];
-function prepUnitOz(qty, unit){ var q = parseFloat(qty) || 0; return unit === 'ml' ? q / 29.5735 : q; }
+// Same unit + bar-prep cost engine as the Recipe Builder (recomputeBPCost),
+// so pour cost here matches the builder. Only genuine volumes convert to oz;
+// weight/count/unknown units return null and are never priced as ounces.
+var PREP_UNIT_ALIASES = { ounce:'oz', ounces:'oz', milliliter:'ml', milliliters:'ml', teaspoon:'tsp', teaspoons:'tsp', tablespoon:'tbsp', tablespoons:'tbsp', cups:'cup', pint:'pt', pints:'pt', quart:'qt', quarts:'qt', gallon:'gal', gallons:'gal', bottles:'bottle', btl:'bottle', '1l':'bottle-1l', liter:'bottle-1l', litre:'bottle-1l', liters:'bottle-1l', litres:'bottle-1l', dashes:'dash', barspoons:'barspoon', bsp:'barspoon' };
+var PREP_VOL_TO_OZ = { oz:1, ml:1/29.5735, tsp:1/6, tbsp:0.5, cup:8, pt:16, qt:32, gal:128, bottle:750/29.5735, 'bottle-1l':1000/29.5735 };
+function prepNormUnit(u){ var k = String(u || '').trim().toLowerCase(); if (PREP_UNIT_ALIASES[k]) return PREP_UNIT_ALIASES[k]; if (k.length > 1 && k.slice(-1) === 's' && PREP_UNIT_ALIASES[k.slice(0,-1)]) return PREP_UNIT_ALIASES[k.slice(0,-1)]; return k; }
+function prepUnitOz(qty, unit){ var f = PREP_VOL_TO_OZ[prepNormUnit(unit)]; if (f == null) return null; var q = parseFloat(qty); return q > 0 ? q * f : null; }
+function prepRowCost(row){
+  if (!row.ingredientId || NEGLIGIBLE.indexOf(prepNormUnit(row.unit)) > -1) return null;
+  var found = findIng(row.ingredientId);
+  if (!found || !found.costPerOz) return null;
+  var oz = prepUnitOz(row.qty, row.unit);
+  return oz == null ? null : oz * found.costPerOz;
+}
 function computePrepCosts(){
-  barPreps.forEach(function(p){
-    var sumCost = 0, sumVol = 0;
-    (p.ingredients || []).forEach(function(c){
-      if (!c.ingredientId || (c.unit !== 'oz' && c.unit !== 'ml')) return;
-      var base = spirits.find(function(s){return s.id===c.ingredientId;}) || otherIngredients.find(function(o){return o.id===c.ingredientId;});
-      var oz = prepUnitOz(c.qty, c.unit);
-      if (base && base.costPerOz) sumCost += oz * base.costPerOz;
-      sumVol += oz;
+  // Two passes so a prep built on another prep picks up its cost.
+  for (var pass = 0; pass < 2; pass++) {
+    barPreps.forEach(function(p){
+      var batch = 0, vol = 0;
+      (p.ingredients || []).forEach(function(c){
+        var oz = prepUnitOz(c.qty, c.unit);
+        if (oz != null) vol += oz;            // yield counts ALL volume rows, linked or not (e.g. water)
+        var cost = prepRowCost(c);
+        if (cost != null) batch += cost;
+      });
+      var y = p.yieldManual ? (parseFloat(p.yieldOz) || 0) : vol;
+      if (batch > 0 && y > 0) p.costPerOz = batch / y;
+      else if (p.flatBatchOz > 0 && p.flatCostDollars > 0) p.costPerOz = p.flatCostDollars / p.flatBatchOz;
     });
-    if (p.costPerOz == null && sumVol > 0) p.costPerOz = Math.round((sumCost / sumVol) * 1000) / 1000;
-  });
+  }
 }
 function findIng(id) {
   return spirits.find(s => s.id === id) || otherIngredients.find(o => o.id === id) || barPreps.find(p => p.id === id) || null;
@@ -747,12 +764,8 @@ function calcCost(r) {
   for (const ing of r.ingredients) {
     const rows = ing.isBatchGroup ? (ing.children || []) : [ing];
     for (const row of rows) {
-      if (!row.ingredientId || NEGLIGIBLE.includes(row.unit)) continue;
-      const found = findIng(row.ingredientId);
-      if (!found || !found.costPerOz) continue;
-      const qty = parseFloat(row.qty) || 0;
-      const oz = row.unit === 'ml' ? qty / 29.5735 : qty;
-      total += oz * found.costPerOz;
+      var c = prepRowCost(row); if (c == null) continue;
+      total += c;
       hasAny = true;
     }
   }
@@ -1117,9 +1130,7 @@ function renderExpensiveIngredients() {
         if (!found || !found.costPerOz) return;
         if (!ingUsage[row.ingredientId]) ingUsage[row.ingredientId] = { found, count: 0, totalCost: 0 };
         ingUsage[row.ingredientId].count++;
-        const qty = parseFloat(row.qty) || 0;
-        const oz = row.unit === 'ml' ? qty / 29.5735 : qty;
-        ingUsage[row.ingredientId].totalCost += oz * found.costPerOz;
+        ingUsage[row.ingredientId].totalCost += prepRowCost(row) || 0;
       });
     });
   });
