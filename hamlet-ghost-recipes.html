@@ -528,7 +528,7 @@ const PAGE_ID = 'recipes';
 // Bump APP_BUILD and version.json together on every deploy. A tab running an
 // older build than version.json is refused writes (see checkAppVersion) so a
 // stale, still-open tab can't overwrite with outdated logic.
-const APP_BUILD = 24;
+const APP_BUILD = 25;
 let appIsStale = false;
 
 // Poll the deployed build marker (cache-busted). If this tab is behind, block
@@ -793,7 +793,7 @@ let cogsTarget = 20;
 
 const GLASS_OPTIONS = ['Small Rocks','Dbl Rocks','Collins','Hurricane','Coupe','Egg White Coupe','Martini','Angled Pint','Fancy Rocks','Jet Pilot','Square Side Coupe','Mug','Pint','Fancy Beer','Fizz','Snifter'];
 const ICE_OPTIONS = ['Rocks','Big Cube','Collins Cube','Crushed','No Ice'];
-const FLAVOR_OPTIONS = ['Citrusy','Boozy','Bitter','Herbal','Sweet','Smoky','Savory','Tropical','Floral','Spicy'];
+const FLAVOR_OPTIONS = ['Citrusy','Boozy','Bitter','Herbal','Sweet','Smoky','Savory','Tropical','Floral','Spicy','Green','Nutty','Spiced Notes','Crisp','Oaky','Refreshing','Toasted','Fruity'];
 const STYLE_OPTIONS = ['Stirred','Shaken','Built','Carbonated','Frozen'];
 const FAMILY_OPTIONS = ['Old Fashioned Family','Manhattan Family','Martini Family','Negroni Family','Classic Sour','Egg White / Foam Sour','Collins','Fizz','Highball','Aperitivo Style','Digestivo / Black Manhattan Style','Classic Tiki','Modern Tropical','Cream / Dessert Cocktails','Hot Cocktails','Savory / Culinary Cocktails','Carbonated Cocktails','Clarified Cocktails','Frozen Cocktails','Zero-Proof Cocktails'];
 const UNIT_OPTIONS = ['oz','ml','qt','cup','tsp','tbsp','bottle','bottle-1l','g','kg','lb','dash','barspoon','rinse','drops','whole'];
@@ -1704,7 +1704,7 @@ function renderBuilder(r) {
         </div>
         <div style="margin-top:1rem;">
           <div class="form-label" style="margin-bottom:5px;">Method notes</div>
-          <input type="text" class="form-input" placeholder="e.g. omit lemon if force carbonated" value="${esc(r.methodNotes||'')}" oninput="updateField('methodNotes',this.value)">
+          <textarea class="form-textarea" style="width:100%;min-height:80px;box-sizing:border-box;" placeholder="e.g. omit lemon if force carbonated" oninput="updateField('methodNotes',this.value)">${esc(r.methodNotes||'')}</textarea>
           <div style="font-size:11px;color:var(--ink-light);margin-top:4px;">Appended to method line on spec sheet with a dash.</div>
         </div>
       </div>
