@@ -84,6 +84,7 @@
   .sheet-stage { background: #e3ded3; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 16px 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; min-height: 60vh; overflow-x: auto; }
   .page-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-light); margin-top: 8px; }
   .page-label.warn { color: var(--accent); }
+  .fit-note { background: #fbf6e6; border: 1px solid rgba(156,114,8,0.35); color: #7a5a06; padding: 7px 14px; border-radius: var(--radius); font-size: 12px; max-width: 8.5in; text-align: center; line-height: 1.4; }
   .overflow-warn { background: #f5e8e6; border: 1px solid rgba(200,57,43,0.35); color: var(--accent); padding: 8px 14px; border-radius: var(--radius); font-size: 12px; max-width: 8.5in; text-align: center; line-height: 1.4; }
 
   /* ── PRINTED PAGE ─────────────────────────────────────────── */
@@ -148,6 +149,12 @@
   .brk-tools button.on { background: var(--ink); color: white; border-color: var(--ink); }
   [data-brk]::before { content: attr(data-brk-label); position: absolute; top: -11px; left: 0; font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); background: white; padding: 0 4px 0 0; line-height: 1; }
   [data-brk] { box-shadow: 0 -1.5px 0 0 var(--accent); }
+  [draggable="true"] { cursor: grab; }
+  [draggable="true"]:hover { background: #fbfaf7; }
+  .dragging { opacity: 0.35; }
+  .drop-before::after, .drop-after::after { content: ""; position: absolute; left: -4px; right: -4px; height: 3px; background: var(--accent); border-radius: 2px; pointer-events: none; }
+  .drop-before::after { top: -8px; }
+  .drop-after::after { bottom: -8px; }
 
   /* TOAST */
   .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--ink); color: var(--parchment); padding: 10px 16px; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; border-left: 3px solid var(--accent); opacity: 0; transform: translateY(8px); transition: opacity 0.2s, transform 0.2s; z-index: 200; pointer-events: none; }
@@ -158,7 +165,7 @@
     @page { size: 8.5in 11in; margin: 0.5in; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { background: white; }
-    .nav, .ui-header, .controls, .page-label, .overflow-warn, .brk-tools, .toast,
+    .nav, .ui-header, .controls, .page-label, .overflow-warn, .fit-note, .brk-tools, .toast,
     #save-error-banner, #stale-overlay, #tenant-badge { display: none !important; }
     .preview-ui { max-width: none; padding: 0; margin: 0; }
     .layout { display: block; }
@@ -169,6 +176,7 @@
     .page.blank > * { display: none; }
     [data-brk] { box-shadow: none; }
     [data-brk]::before { display: none; }
+    [draggable="true"]:hover { background: none; }
   }
 </style>
 </head>
@@ -242,9 +250,9 @@
       <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
           Layout
-          <button class="btn btn-sm" id="reset-breaks" onclick="resetBreaks()">Reset breaks</button>
+          <button class="btn btn-sm" id="reset-layout" onclick="resetLayout()">Reset layout</button>
         </div>
-        <div class="hint">Cards pack into two columns automatically. Hover a card in the preview and click <b>Col</b> or <b>Page</b> to start it at the top of a new column or page. Bar prep always starts on a fresh sheet.</div>
+        <div class="hint">Cards pack into two columns, and auto-fit works to keep cocktails on sheet 1 and prep on sheet 2. <b>Drag</b> a card to reorder it within its section. Hover a card and click <b>Col</b> or <b>Page</b> to start it at the top of a new column or page.</div>
       </div>
     </div>
 
@@ -500,7 +508,7 @@ function currentUserEmail() {
 }
 // Bump APP_BUILD and version.json together on every deploy. A tab on an older
 // build than version.json is refused writes so a stale open tab can't overwrite.
-const APP_BUILD = 28;
+const APP_BUILD = 29;
 let appIsStale = false;
 async function checkAppVersion() {
   try {
@@ -899,14 +907,29 @@ function getBarPrepForSheet() {
 // ─── SHEET ITEMS ─────────────────────────────────────────────────────────────
 // Everything on the sheet is a flat list of items, each with a stable `key`
 // so a manual break survives re-renders and data reloads.
+// Cards can be dragged into a sheet-only order (prefs.order). Order only
+// applies within a group (a menu section, or a prep block) so a cocktail can
+// never end up printed under the wrong section heading. Cards the user hasn't
+// placed yet (e.g. newly added to the menu) go to the end of their group.
+function applySavedOrder(list) {
+  const order = Array.isArray(prefs.order) ? prefs.order : [];
+  if (!order.length) return list;
+  const rank = new Map(order.map((k, i) => [k, i]));
+  return list
+    .map((it, i) => ({ it, i, r: rank.has(it.key) ? rank.get(it.key) : Infinity }))
+    .sort((a, b) => (a.r - b.r) || (a.i - b.i))
+    .map(x => x.it);
+}
+
 function cocktailItems() {
   const vis = sections.filter(s => s.visible)
     .map(s => ({ s, rs: getRecipesForSection(s.label) }))
     .filter(x => x.rs.length);
   const items = [];
   vis.forEach(({ s, rs }) => {
-    if (vis.length > 1) items.push({ type: 'section', key: 'sec:' + s.label, title: s.label });
-    rs.forEach(r => items.push({ type: 'cocktail', key: 'c:' + r.id, r }));
+    const group = 'sec:' + s.label;
+    if (vis.length > 1) items.push({ type: 'section', key: group, group, title: s.label });
+    items.push(...applySavedOrder(rs.map(r => ({ type: 'cocktail', key: 'c:' + r.id, group, r }))));
   });
   return items;
 }
@@ -915,10 +938,10 @@ function prepItems() {
   const { barPrepRecipes, houseStaples } = getBarPrepForSheet();
   const both = barPrepRecipes.length && houseStaples.length;
   const items = [];
-  if (both) items.push({ type: 'section', key: 'psec:menu', title: 'Menu-specific prep' });
-  barPrepRecipes.forEach(r => items.push({ type: 'prep', key: 'p:' + r.id, r }));
-  if (both) items.push({ type: 'section', key: 'psec:staples', title: 'House staples' });
-  houseStaples.forEach(o => items.push({ type: 'staple', key: 's:' + o.id, o }));
+  if (both) items.push({ type: 'section', key: 'psec:menu', group: 'menu', title: 'Menu-specific prep' });
+  items.push(...applySavedOrder(barPrepRecipes.map(r => ({ type: 'prep', key: 'p:' + r.id, group: 'menu', r }))));
+  if (both) items.push({ type: 'section', key: 'psec:staples', group: 'staples', title: 'House staples' });
+  items.push(...applySavedOrder(houseStaples.map(o => ({ type: 'staple', key: 's:' + o.id, group: 'staples', o }))));
   return items;
 }
 
@@ -1037,8 +1060,55 @@ function renderItemNode(item, opts, withTools) {
       tools.appendChild(b);
     });
     el.appendChild(tools);
+    if (item.type !== 'section') wireDrag(el, item);
   }
   return el;
+}
+
+// ─── DRAG TO REORDER ─────────────────────────────────────────────────────────
+let dragItem = null;
+function clearDropMarks() {
+  document.querySelectorAll('.drop-before, .drop-after').forEach(n => n.classList.remove('drop-before', 'drop-after'));
+}
+function wireDrag(el, item) {
+  el.draggable = true;
+  el.addEventListener('dragstart', e => {
+    dragItem = item;
+    el.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', item.key);
+  });
+  el.addEventListener('dragend', () => { dragItem = null; el.classList.remove('dragging'); clearDropMarks(); });
+  el.addEventListener('dragover', e => {
+    if (!dragItem || dragItem.group !== item.group || dragItem.key === item.key) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const r = el.getBoundingClientRect();
+    const after = e.clientY > r.top + r.height / 2;
+    clearDropMarks();
+    el.classList.add(after ? 'drop-after' : 'drop-before');
+  });
+  el.addEventListener('dragleave', e => { if (!el.contains(e.relatedTarget)) el.classList.remove('drop-before', 'drop-after'); });
+  el.addEventListener('drop', e => {
+    if (!dragItem || dragItem.group !== item.group) return;
+    e.preventDefault();
+    const after = el.classList.contains('drop-after');
+    moveCard(dragItem.key, item.key, after);
+  });
+}
+
+// Reorder within the dragged card's group, starting from the order currently
+// on screen (which may already include auto-fit moves), and save it.
+function moveCard(fromKey, toKey, after) {
+  if (fromKey === toKey) return;
+  const shown = [...document.querySelectorAll('#sheet-stage [data-key]')].map(n => n.dataset.key);
+  const seq = shown.filter(k => k !== fromKey);
+  const at = seq.indexOf(toKey);
+  if (at < 0) return;
+  seq.splice(after ? at + 1 : at, 0, fromKey);
+  prefs.order = seq;
+  savePrefs();
+  renderSheet();
 }
 
 function toggleBreak(key, kind) {
@@ -1048,8 +1118,9 @@ function toggleBreak(key, kind) {
   renderSheet();
 }
 
-function resetBreaks() {
+function resetLayout() {
   prefs.breaks = {};
+  delete prefs.order;
   savePrefs();
   renderSheet();
 }
@@ -1084,13 +1155,16 @@ function measureItems(items, opts) {
 
 // Bin-pack items into pages of 2 columns. Manual breaks force a new column or
 // page (ignored when it would only create an empty one). A section divider is
-// kept with the item after it, and prefers the top of a column once the
-// current column is past ~1/3 full.
-function packIntoPages(items, heights, avail) {
-  if (!items.length) return [];
+// always kept with the item after it. Mode flags:
+//   sectionTop — a divider jumps to the top of the next column once the
+//                current one is past ~1/3 full (nicer, but costs space)
+//   fill       — when the next card doesn't fit, pull a later card from the
+//                same section that does, so column bottoms don't go to waste
+//                (cards with a manual break are never pulled)
+function packOnce(items, heights, avail, mode) {
   const newPage = () => ({ columns: [[], []] });
   const pages = [newPage()];
-  let p = 0, c = 0, h = 0;
+  let p = 0, c = 0, h = 0, moved = 0;
   const pageEmpty = () => pages[p].columns.every(col => !col.length);
   const advanceColumn = () => {
     c++;
@@ -1098,21 +1172,130 @@ function packIntoPages(items, heights, avail) {
     h = 0;
   };
   const advancePage = () => { pages.push(newPage()); p++; c = 0; h = 0; };
+  const place = q => { pages[p].columns[c].push(q.item); h += q.h; };
 
-  items.forEach((item, i) => {
-    const brk = prefs.breaks[item.key];
+  const queue = items.map((item, i) => ({ item, h: heights[i] }));
+  while (queue.length) {
+    const head = queue[0];
+    const brk = prefs.breaks[head.item.key];
     if (brk === 'page' && !pageEmpty()) advancePage();
     else if (brk === 'col' && h > 0) advanceColumn();
 
-    const isSection = item.type === 'section';
-    const need = heights[i] + (isSection && i + 1 < items.length ? heights[i + 1] : 0);
-    const wantsTop = isSection && h > avail * 0.35;
-    if (h > 0 && (h + need > avail || wantsTop)) advanceColumn();
+    const isSection = head.item.type === 'section';
+    const need = head.h + (isSection && queue[1] ? queue[1].h : 0);
+    const wantsTop = mode.sectionTop && isSection && h > avail * 0.35;
+    if (h > 0 && (h + need > avail || wantsTop)) {
+      if (mode.fill && !wantsTop) {
+        const col = pages[p].columns[c];
+        const group = col.length ? col[col.length - 1].group : null;
+        let best = -1;
+        for (let j = 1; j < queue.length; j++) {
+          const q = queue[j];
+          if (q.item.type === 'section' || q.item.group !== group) break;
+          if (prefs.breaks[q.item.key]) continue;
+          if (h + q.h <= avail && (best < 0 || q.h > queue[best].h)) best = j;
+        }
+        if (best > 0) { place(queue.splice(best, 1)[0]); moved++; continue; }
+      }
+      advanceColumn();
+    }
+    place(queue.shift());
+  }
+  return { pages, moved };
+}
 
-    pages[p].columns[c].push(item);
-    h += heights[i];
+// Try progressively harder layouts until the list fits on `targetSides`
+// (one sheet, front and back). The user's order is kept whenever it fits.
+function packIntoPages(items, heights, avail, targetSides) {
+  if (!items.length) return { pages: [], moved: 0 };
+  const modes = [
+    { sectionTop: true },
+    { sectionTop: false },
+    { sectionTop: false, fill: true }
+  ];
+  let best = null;
+  for (const mode of modes) {
+    const r = packOnce(items, heights, avail, mode);
+    if (r.pages.length <= targetSides) return r;
+    if (!best || r.pages.length < best.pages.length) best = r;
+  }
+  // Last resort: search for any arrangement that fits. Skipped when the user
+  // has placed manual breaks — then they're steering and we don't second-guess.
+  if (!items.some(it => prefs.breaks[it.key])) {
+    const found = searchFit(items, heights, avail, targetSides * 2);
+    if (found) return found;
+  }
+  return best;
+}
+
+// Bounded search over which cards go in which column. Sections stay in order
+// and each card stays in its own section; within a column cards keep their
+// original relative order, so we enumerate subsets (not permutations). Tries
+// the original order first, so the first fit found moves as little as possible.
+function searchFit(items, heights, avail, maxCols) {
+  const groups = [];
+  items.forEach((it, i) => {
+    if (it.type === 'section' || !groups.length || groups[groups.length - 1].group !== it.group) {
+      groups.push({ group: it.group, sec: it.type === 'section' ? i : -1, cards: [] });
+    }
+    if (it.type !== 'section') groups[groups.length - 1].cards.push(i);
   });
-  return pages;
+  let remaining = heights.reduce((a, b) => a + b, 0);
+  const cols = [[]];
+  let budget = 200000;
+
+  // g: current group, left: its unplaced cards, secDone: its divider placed,
+  // needCard: divider just placed, a card must follow in this column,
+  // minIdx: next card in this column must come after this one (subset order)
+  function rec(g, left, secDone, needCard, minIdx, h) {
+    if (--budget < 0) return false;
+    const col = cols.length - 1;
+    if (remaining > (maxCols - col - 1) * avail + (avail - h)) return false;
+    if (g === groups.length) return true;
+    const G = groups[g];
+    const newCol = () => {
+      if (h === 0 || col + 1 >= maxCols || needCard) return false;
+      cols.push([]);
+      if (rec(g, left, secDone, false, -1, 0)) return true;
+      cols.pop();
+      return false;
+    };
+    if (G.sec >= 0 && !secDone) {
+      const sh = heights[G.sec];
+      const minCard = Math.min(...left.map(i => heights[i]));
+      if (h + sh + minCard <= avail) {
+        cols[col].push(G.sec); remaining -= sh;
+        if (rec(g, left, true, true, -1, h + sh)) return true;
+        cols[col].pop(); remaining += sh;
+      }
+      return newCol();
+    }
+    if (!left.length) return rec(g + 1, groups[g + 1] ? groups[g + 1].cards.slice() : [], false, false, -1, h);
+    for (const i of left) {
+      if (i <= minIdx || h + heights[i] > avail) continue;
+      cols[col].push(i); remaining -= heights[i];
+      if (rec(g, left.filter(x => x !== i), secDone, false, i, h + heights[i])) return true;
+      cols[col].pop(); remaining += heights[i];
+    }
+    return newCol();
+  }
+
+  if (!groups.length || !rec(0, groups[0].cards.slice(), false, false, -1, 0)) return null;
+
+  const pages = [];
+  for (let c = 0; c < cols.length; c += 2) {
+    pages.push({ columns: [cols[c].map(i => items[i]), (cols[c + 1] || []).map(i => items[i])] });
+  }
+  // Cards moved = fewest cards you'd have to pick up to restore the original
+  // order (everything outside the longest still-in-order run)
+  const seq = cols.flat();
+  const tails = [];
+  seq.forEach(i => {
+    let lo = 0, hi = tails.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (tails[mid] < i) lo = mid + 1; else hi = mid; }
+    tails[lo] = i;
+  });
+  return { pages, moved: seq.length - tails.length };
 }
 
 // ─── RENDER ──────────────────────────────────────────────────────────────────
@@ -1175,6 +1358,13 @@ function appendWarn(stage, what, sides) {
   stage.appendChild(el);
 }
 
+function appendFitNote(stage, moved) {
+  const el = document.createElement('div');
+  el.className = 'fit-note';
+  el.textContent = `Auto-fit moved ${moved} card${moved === 1 ? '' : 's'} within ${moved === 1 ? 'its section' : 'their sections'} so this fits on one sheet. Drag cards to arrange them yourself.`;
+  stage.appendChild(el);
+}
+
 function renderSheet() {
   const stage = document.getElementById('sheet-stage');
   if (!stage) return;
@@ -1186,8 +1376,9 @@ function renderSheet() {
   const pItems = opts.showBarPrep ? prepItems() : [];
   const cm = measureItems(cItems, opts);
   const pm = measureItems(pItems, opts);
-  const cPages = packIntoPages(cItems, cm.heights, cm.avail);
-  const pPages = packIntoPages(pItems, pm.heights, pm.avail);
+  const cPack = packIntoPages(cItems, cm.heights, cm.avail, 2);
+  const pPack = packIntoPages(pItems, pm.heights, pm.avail, 2);
+  const cPages = cPack.pages, pPages = pPack.pages;
 
   // Render each item once, with its break tools, then slot into columns
   const withNodes = pages => pages.forEach(pg => pg.columns.forEach((col, ci) => {
@@ -1207,6 +1398,7 @@ function renderSheet() {
     const blankPad = pPages.length && cPages.length % 2 === 1;
     const sides = cPages.length + (blankPad ? 1 : 0);
     if (cPages.length > 2) appendWarn(stage, 'The cocktail list', cPages.length);
+    else if (cPack.moved) appendFitNote(stage, cPack.moved);
     cPages.forEach((pg, i) => {
       appendLabel(stage, sideLabel(title, i, sides), i >= 2);
       const m = cPages.length > 1 ? `${meta} · ${i + 1}/${cPages.length}` : meta;
@@ -1221,6 +1413,7 @@ function renderSheet() {
   // Bar prep — starts on its own sheet
   if (pPages.length) {
     if (pPages.length > 2) appendWarn(stage, 'Bar Prep', pPages.length);
+    else if (pPack.moved) appendFitNote(stage, pPack.moved);
     pPages.forEach((pg, i) => {
       appendLabel(stage, sideLabel('Bar Prep', i, pPages.length), i >= 2);
       const m = pPages.length > 1 ? `${meta} · ${i + 1}/${pPages.length}` : meta;
@@ -1231,9 +1424,9 @@ function renderSheet() {
   const all = stage.querySelectorAll('.page');
   if (all.length) all[all.length - 1].classList.add('last');
 
-  const anyBreaks = Object.keys(prefs.breaks).length > 0;
-  const rb = document.getElementById('reset-breaks');
-  if (rb) rb.disabled = !anyBreaks;
+  const custom = Object.keys(prefs.breaks).length > 0 || (Array.isArray(prefs.order) && prefs.order.length > 0);
+  const rb = document.getElementById('reset-layout');
+  if (rb) rb.disabled = !custom;
 }
 
 // ─── PRINT ───────────────────────────────────────────────────────────────────
